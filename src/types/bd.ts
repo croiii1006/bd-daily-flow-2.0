@@ -123,6 +123,34 @@ export interface ReminderItem {
   reason: string;
 }
 
+/* ================= Kanban ================= */
+
+export interface KanbanBoard {
+  id: string;
+  name: string;
+  description?: string;
+}
+
+export interface KanbanColumn {
+  id: string;
+  boardId: string;
+  name: string;
+  position?: number;
+}
+
+export interface KanbanCard {
+  id: string;
+  boardId: string;
+  columnId: string;
+  title: string;
+  description?: string;
+  assignee?: string;
+  dueDate?: string;
+  tags?: string[];
+  position?: number;
+  sourceRecordId?: string;
+}
+
 /* ================= 下拉选项（所有 Tab 依赖） ================= */
 
 /* ???? */
