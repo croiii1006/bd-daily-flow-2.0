@@ -22,7 +22,7 @@ export const PROJECT_STAGE_BADGE_CLASS: Record<ProjectStage, string> = {
   停滞: 'bg-warning/10 text-warning border-warning/30',
 };
 
-export const BD_OPTIONS = ['邹思敏', '张三', '李四', '王五'] as const;
+export const BD_OPTIONS = ['邹思敏', '黄毅', '袁晓南'] as const;
 export type BdOption = (typeof BD_OPTIONS)[number];
 
 export const AM_OPTIONS = ['小明', '小红', '小华', '小李'] as const;
