@@ -159,10 +159,9 @@ export const PROJECT_STATUS = [
 export const PRIORITIES = ['高', '中', '低'] as const;
 export const COMPLETION_STATUS = ['是', '否'] as const;
 export const CONTRACT_ENTITIES = [
-  '北京XX科技有限公司',
-  '上海XX传媒有限公司',
-  '深圳XX文化有限公司',
-  '杭州XX网络有限公司',
+  '橙果视界（上海）科技有限公司',
+  '橙果视界（深圳）科技有限公司',
+  'OranAI. LTD.',
 ] as const;
 export const COMMUNICATION_DURATIONS = [
   '30分钟以内',
@@ -204,16 +203,24 @@ export const REMINDER_TABLE_COLUMNS = [
 ] as const;
 
 export const DEAL_TABLE_COLUMNS = [
+  { key: 'serialNo', title: '编号', headClassName: 'w-[90px]' },
   { key: 'dealId', title: '立项ID', headClassName: 'w-[120px]' },
-  { key: 'projectId', title: '项目ID', headClassName: 'w-[120px]' },
-  { key: 'projectName', title: '项目名称', headClassName: 'w-[120px]' },
-  { key: 'signCompany', title: '签约主体', headClassName: 'w-[80px]' },
+  { key: 'customerId', title: '客户ID', headClassName: 'w-[120px]' },
+  { key: 'month', title: '所属月份', headClassName: 'w-[90px]' },
+  { key: 'startDate', title: '项目开始时间', headClassName: 'w-[120px]' },
+  { key: 'endDate', title: '项目结束时间', headClassName: 'w-[120px]' },
+  { key: 'isFinished', title: '是否完结', headClassName: 'w-[90px]' },
+  { key: 'signCompany', title: '签约公司主体', headClassName: 'w-[140px]' },
   { key: 'incomeWithTax', title: '含税收入', headClassName: 'w-[100px] text-right' },
-  { key: 'incomeWithoutTax', title: '不含税收入', headClassName: 'w-[100px] text-right' },
+  { key: 'incomeWithoutTax', title: '不含税收入', headClassName: 'w-[110px] text-right' },
   { key: 'estimatedCost', title: '预估成本', headClassName: 'w-[100px] text-right' },
-  { key: 'grossMargin', title: '毛利率', headClassName: 'w-[70px] text-right' },
-  { key: 'receivedAmount', title: '已收金额', headClassName: 'w-[100px] text-right' },
-  { key: 'remainingReceivable', title: '剩余应收', headClassName: 'w-[100px] text-right' },
+  { key: 'paidThirdPartyCost', title: '已付三方成本', headClassName: 'w-[120px] text-right' },
+  { key: 'grossProfit', title: '毛利', headClassName: 'w-[90px] text-right' },
+  { key: 'grossMargin', title: '毛利率', headClassName: 'w-[80px] text-right' },
+  { key: 'firstPaymentDate', title: '预计首款时间', headClassName: 'w-[120px]' },
+  { key: 'finalPaymentDate', title: '预计尾款时间', headClassName: 'w-[120px]' },
+  { key: 'receivedAmount', title: '已收金额', headClassName: 'w-[110px] text-right' },
+  { key: 'remainingReceivable', title: '剩余应收金额', headClassName: 'w-[120px] text-right' },
 ] as const;
 
 export const CUSTOMER_LIST_COLUMNS = [

@@ -789,6 +789,34 @@ app.put("/api/projects/:projectId", async (req, res) => {
 
 
 // ====== 立项（Deals） ======
+const formatDateLoose = (v) => {
+  if (v === null || v === undefined) return "";
+  const str = String(v).trim();
+  if (!str || str === "0") return "";
+  const num = Number(str);
+  const isNum = !Number.isNaN(num);
+  if (isNum) {
+    const isMs = str.length >= 13 || num > 1e11;
+    const isSec = str.length === 10 || (num >= 1e9 && num < 2e10);
+    const isExcelSerial = num > 20000 && num < 60000; // roughly 1955-2070
+    if (isMs || isSec) {
+      const d = new Date(isMs ? num : num * 1000);
+      if (!Number.isNaN(d.getTime())) return d.toISOString().slice(0, 10);
+    }
+    if (isExcelSerial) {
+      const base = Date.UTC(1899, 11, 30); // Excel 序列号起点（含 1900 闰年 bug 修正）
+      const d = new Date(base + num * 24 * 60 * 60 * 1000);
+      if (!Number.isNaN(d.getTime())) return d.toISOString().slice(0, 10);
+    }
+    return str; // 其它数字原样返回，避免误改
+  }
+  if (/^\d{4}[-/]\d{1,2}[-/]\d{1,2}$/.test(str)) {
+    const d = new Date(str.replace(/\//g, "-"));
+    if (!Number.isNaN(d.getTime())) return d.toISOString().slice(0, 10);
+  }
+  return str;
+};
+
 function mapDealRecord(it) {
   const f = it?.fields || {};
   const num = (v) => {
@@ -803,8 +831,8 @@ function mapDealRecord(it) {
     projectName: String(f["项目名称"] || f.projectName || "").trim(),
     month: String(f["所属月份"] ?? f.month ?? "").trim(),
 
-    startDate: f["项目开始时间"] || f.startDate || "",
-    endDate: f["项目结束时间"] || f.endDate || "",
+    startDate: formatDateLoose(f["项目开始时间"] ?? f.startDate),
+    endDate: formatDateLoose(f["项目结束时间"] ?? f.endDate),
     isFinished: f["是否完结"] ?? f["是否完成"] ?? f.isFinished ?? "",
 
     signCompany: f["签约公司主体"] || f["签约主体"] || f.signCompany || "",
@@ -814,8 +842,8 @@ function mapDealRecord(it) {
     paidThirdPartyCost: num(f["已付三方成本"] ?? f.paidThirdPartyCost),
     grossProfit: num(f["毛利"] ?? f.grossProfit),
     grossMargin: num(f["毛利率"] ?? f.grossMargin),
-    firstPaymentDate: f["预计首款时间"] || f.firstPaymentDate || "",
-    finalPaymentDate: f["预计尾款时间"] || f.finalPaymentDate || "",
+    firstPaymentDate: formatDateLoose(f["预计首款时间"] ?? f.firstPaymentDate),
+    finalPaymentDate: formatDateLoose(f["预计尾款时间"] ?? f.finalPaymentDate),
     receivedAmount: num(f["已收金额"] ?? f.receivedAmount),
     remainingReceivable: num(f["剩余应收金额"] ?? f.remainingReceivable),
   };
