@@ -138,8 +138,10 @@ export async function getCustomers({ keyword } = {}) {
           : "",
 
       relatedProjectIds:
-        Array.isArray(f["项目进度数据表1-客户ID"]) &&
-        f["项目进度数据表1-客户ID"][0]
+        Array.isArray(f["项目日志表"]) && f["项目日志表"][0]
+          ? f["项目日志表"][0].text_arr || []
+          : Array.isArray(f["项目进度数据表1-客户ID"]) &&
+            f["项目进度数据表1-客户ID"][0]
           ? f["项目进度数据表1-客户ID"][0].text_arr || []
           : [],
     };

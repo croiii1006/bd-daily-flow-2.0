@@ -20,6 +20,19 @@ const PROJECT_APP_TOKEN = process.env.FEISHU_PROJECT_APP_TOKEN || process.env.FE
 const PROJECT_TABLE_ID = process.env.FEISHU_BITABLE_PROJECT_TABLE_ID;
 const DEAL_APP_TOKEN = process.env.FEISHU_DEAL_APP_TOKEN || PROJECT_APP_TOKEN;
 const DEAL_TABLE_ID = process.env.FEISHU_BITABLE_DEAL_TABLE_ID;
+const KANBAN_APP_TOKEN = process.env.FEISHU_KANBAN_APP_TOKEN || process.env.FEISHU_BITABLE_APP_TOKEN;
+const KANBAN_BOARD_ID = process.env.FEISHU_KANBAN_BOARD_ID;
+const DASHBOARD_EMBED_URL = process.env.FEISHU_DASHBOARD_EMBED_URL;
+
+function sendKanbanPlaceholder(res, data, extra = {}) {
+  return res.json({
+    success: true,
+    reserved: true,
+    data: data ?? null,
+    hint: "Kanban API placeholder; connect to Feishu Kanban later.",
+    ...extra,
+  });
+}
 
 // ====== DEBUG：确认当前 server / env ======
 app.get("/api/debug-env", (req, res) => {
@@ -1069,6 +1082,15 @@ app.post("/api/deals", async (req, res) => {
     if (body.receivedAmount !== undefined && body.receivedAmount !== "")
       setIf("已收金额", Number(body.receivedAmount));
 
+    if (body.thirdPartyCost !== undefined && body.thirdPartyCost !== "")
+      setIf("已付三方成本", Number(body.thirdPartyCost));
+    if (body.grossProfit !== undefined && body.grossProfit !== "")
+      setIf("毛利", Number(body.grossProfit));
+    if (body.grossMargin !== undefined && body.grossMargin !== "")
+      setIf("毛利率", Number(body.grossMargin));
+    if (body.remainingReceivable !== undefined && body.remainingReceivable !== "")
+      setIf("剩余应收金额", Number(body.remainingReceivable));
+
     setIf("预计首款时间", body.firstPaymentDate);
     setIf("预计尾款时间", body.finalPaymentDate);
 
@@ -1147,6 +1169,15 @@ app.put("/api/deals/:dealId", async (req, res) => {
       setIf("已付三方成本", Number(body.paidThirdPartyCost));
     if (body.receivedAmount !== undefined && body.receivedAmount !== "")
       setIf("已收金额", Number(body.receivedAmount));
+
+    if (body.thirdPartyCost !== undefined && body.thirdPartyCost !== "")
+      setIf("已付三方成本", Number(body.thirdPartyCost));
+    if (body.grossProfit !== undefined && body.grossProfit !== "")
+      setIf("毛利", Number(body.grossProfit));
+    if (body.grossMargin !== undefined && body.grossMargin !== "")
+      setIf("毛利率", Number(body.grossMargin));
+    if (body.remainingReceivable !== undefined && body.remainingReceivable !== "")
+      setIf("剩余应收金额", Number(body.remainingReceivable));
 
     setIf("预计首款时间", body.firstPaymentDate);
     setIf("预计尾款时间", body.finalPaymentDate);
@@ -1238,6 +1269,90 @@ app.get("/api/project-persons", async (req, res) => {
     console.error("GET /api/project-persons failed:", e);
     return res.status(500).json({ success: false, error: String(e) });
   }
+});
+
+// ====== 看板（Kanban）接口预留 ======
+app.get("/api/kanban/boards", (req, res) => {
+  const boards = KANBAN_BOARD_ID
+    ? [{ id: KANBAN_BOARD_ID, name: "Feishu Kanban", description: "飞书看板占位" }]
+    : [];
+  return sendKanbanPlaceholder(res, boards, {
+    target: { appToken: KANBAN_APP_TOKEN || null, boardId: KANBAN_BOARD_ID || null },
+  });
+});
+
+app.get("/api/kanban/boards/:boardId", (req, res) => {
+  const boardId = String(req.params.boardId || "").trim();
+  const board = boardId
+    ? { id: boardId, name: "Feishu Kanban", description: "飞书看板占位" }
+    : null;
+  return sendKanbanPlaceholder(res, board);
+});
+
+app.get("/api/kanban/boards/:boardId/columns", (req, res) => {
+  return sendKanbanPlaceholder(res, []);
+});
+
+app.get("/api/kanban/boards/:boardId/cards", (req, res) => {
+  return sendKanbanPlaceholder(res, []);
+});
+
+app.post("/api/kanban/boards/:boardId/cards", (req, res) => {
+  const boardId = String(req.params.boardId || "").trim();
+  const payload = req.body || {};
+  return sendKanbanPlaceholder(res, null, {
+    action: "create_card",
+    boardId,
+    payload,
+  });
+});
+
+app.put("/api/kanban/boards/:boardId/cards/:cardId", (req, res) => {
+  const boardId = String(req.params.boardId || "").trim();
+  const cardId = String(req.params.cardId || "").trim();
+  const payload = req.body || {};
+  return sendKanbanPlaceholder(res, null, {
+    action: "update_card",
+    boardId,
+    cardId,
+    payload,
+  });
+});
+
+app.patch("/api/kanban/boards/:boardId/cards/:cardId/move", (req, res) => {
+  const boardId = String(req.params.boardId || "").trim();
+  const cardId = String(req.params.cardId || "").trim();
+  const payload = req.body || {};
+  return sendKanbanPlaceholder(res, null, {
+    action: "move_card",
+    boardId,
+    cardId,
+    payload,
+  });
+});
+
+app.post("/api/kanban/boards/:boardId/sync", (req, res) => {
+  const boardId = String(req.params.boardId || "").trim();
+  return sendKanbanPlaceholder(res, { syncedAt: new Date().toISOString() }, { boardId });
+});
+
+app.post("/api/kanban/boards/:boardId/push", (req, res) => {
+  const boardId = String(req.params.boardId || "").trim();
+  return sendKanbanPlaceholder(res, { pushedAt: new Date().toISOString() }, { boardId });
+});
+
+// ====== 仪表盘（Dashboard）嵌入 ======
+app.get("/api/dashboard/embed", (req, res) => {
+  if (!DASHBOARD_EMBED_URL) {
+    return res.status(500).json({
+      success: false,
+      error: "missing FEISHU_DASHBOARD_EMBED_URL",
+    });
+  }
+  return res.json({
+    success: true,
+    data: { url: DASHBOARD_EMBED_URL },
+  });
 });
 
 app.listen(PORT, () => {

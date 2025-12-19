@@ -85,6 +85,7 @@ export function feishuToClient(c: any): Client {
 
   const relatedProjectIds =
     (Array.isArray(c?.relatedProjectIds) ? c.relatedProjectIds : null) ||
+    pickTextArr(fields?.["项目日志表"]) ||
     pickTextArr(fields?.["项目进度数据表1-客户ID"]);
 
   return {

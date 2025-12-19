@@ -15,6 +15,7 @@ import {
   FileCheck,
   ClipboardList,
   Bell,
+  LayoutGrid,
   LogOut,
   Menu,
   X,
@@ -26,8 +27,15 @@ import ProjectsTab from "@/pages/tabs/ProjectsTab";
 import DealsTab from "@/pages/tabs/DealsTab";
 import DailyFormTab from "@/pages/tabs/DailyFormTab";
 import RemindersTab from "@/pages/tabs/RemindersTab";
+import KanbanTab from "@/pages/tabs/KanbanTab";
 
-type TabKey = "clients" | "projects" | "deals" | "daily" | "reminders";
+type TabKey =
+  | "kanban"
+  | "clients"
+  | "projects"
+  | "deals"
+  | "daily"
+  | "reminders";
 
 interface TabItem {
   key: TabKey;
@@ -36,6 +44,7 @@ interface TabItem {
 }
 
 const tabs: TabItem[] = [
+  { key: "kanban", label: "看板视图", icon: LayoutGrid },
   { key: "clients", label: "客户", icon: Users },
   { key: "projects", label: "项目", icon: FolderKanban },
   { key: "deals", label: "立项", icon: FileCheck },
@@ -150,6 +159,7 @@ const TabLayout: React.FC = () => {
             {/* 默认访问 /app 时，跳到 /app/clients */}
             <Route path="/" element={<Navigate to="clients" replace />} />
 
+            <Route path="kanban" element={<KanbanTab />} />
             <Route path="clients" element={<ClientsTab />} />
             <Route path="projects" element={<ProjectsTab />} />
             <Route path="deals" element={<DealsTab />} />
