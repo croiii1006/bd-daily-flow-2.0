@@ -1,0 +1,18 @@
+// ????????????? src/config/bdOptions.ts????? re-export ?????
+
+export {
+  CUSTOMER_TYPES,
+  CUSTOMER_LEVELS,
+  ANNUAL_CONTRACT_OPTIONS,
+  INDUSTRIES,
+  BD_LIST,
+  AM_LIST,
+  MONTHS,
+  SERVICE_TYPES,
+  PROJECT_CATEGORIES,
+  PROJECT_STATUS,
+  PRIORITIES,
+  COMPLETION_STATUS,
+  CONTRACT_ENTITIES,
+  COMMUNICATION_DURATIONS,
+} from '@/config/bdOptions';
