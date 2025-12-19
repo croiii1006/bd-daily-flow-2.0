@@ -69,8 +69,10 @@ export interface Project {
 /* ================= Deal ================= */
 
 export interface Deal {
+  serialNo?: string;       // 飞书表「编号」（自动生成）
   dealId: string;
   projectId: string;
+  customerId?: string;
   month: string;
 
   projectName?: string;
@@ -85,12 +87,15 @@ export interface Deal {
   incomeWithTax?: number;
   incomeWithoutTax?: number;
   estimatedCost?: number;
+  paidThirdPartyCost?: number;
   receivedAmount?: number;
+  remainingReceivable?: number;
 
   firstPaymentDate?: string;
   finalPaymentDate?: string;
 
   grossProfit?: number;
+  grossMargin?: number;
 }
 
 /* ================= Daily ================= */

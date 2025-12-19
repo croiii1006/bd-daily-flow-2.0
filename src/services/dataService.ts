@@ -75,7 +75,8 @@ export const dataService = {
         cooperationStatus: (data.cooperationStatus || '').trim(),
         industry: (data.industry || '').trim(),
         isAnnual: !!data.isAnnual,
-        owner: (data as any).owner || (data as any).ownerBd || '',
+        // 后端客户接口读取 ownerBd / ownerUserId
+        ownerBd: (data as any).ownerBd || (data as any).owner || '',
         ownerUserId: (data as any).ownerUserId || '',
       };
 

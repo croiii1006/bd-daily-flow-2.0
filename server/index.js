@@ -142,9 +142,22 @@ app.post("/api/customers", async (req, res) => {
     const industry = String(body.industry || "").trim();
     if (industry) fields["行业大类"] = industry;
 
-    // ⚠️ 人员字段（主BD负责人 type=11）：必须传 user_id（ou_xxx）
-    // 你现在前端只有名字，没有 user_id，就先别写这列，否则很容易写失败/被忽略
-    // if (body.ownerUserId) fields["主BD负责人"] = [{ id: String(body.ownerUserId).trim() }];
+    // ✅ 人员字段（主BD负责人，type=11）：支持传 user_id 或姓名（姓名将自动解析为 user_id）
+    const ownerUserId = String(body.ownerUserId || "").trim();
+    const ownerBd = String(body.ownerBd || "").trim();
+    if (ownerUserId) {
+      fields["主BD负责人"] = [{ id: ownerUserId }];
+    } else if (ownerBd) {
+      const { value: resolved, known } = await resolveCustomerBdField(ownerBd);
+      if (!resolved) {
+        return res.status(400).json({
+          success: false,
+          error: `无法解析人员字段 BD='${ownerBd}'（请确保该人员在飞书表/项目表里出现过一次，或配置 FEISHU_PERSON_ID_MAP）`,
+          known_names: known,
+        });
+      }
+      fields["主BD负责人"] = resolved;
+    }
 
     console.log("🟦 POST /api/customers fields:", fields);
 
@@ -236,8 +249,22 @@ app.put("/api/customers/:customerId", async (req, res) => {
     setIf("行业大类", body.industry);
     if (body.isAnnual !== undefined) setIf("年框客户", Boolean(body.isAnnual));
 
-    // ⚠️ 人员字段需要 user_id；这里默认不写，避免写入失败
-    // if (body.ownerUserId) fields["主BD负责人"] = [{ id: String(body.ownerUserId).trim() }];
+    // ✅ 人员字段（主BD负责人，type=11）：支持传 user_id 或姓名（姓名将自动解析为 user_id）
+    const ownerUserId = String(body.ownerUserId || "").trim();
+    const ownerBd = String(body.ownerBd || "").trim();
+    if (ownerUserId) {
+      fields["主BD负责人"] = [{ id: ownerUserId }];
+    } else if (ownerBd) {
+      const { value: resolved, known } = await resolveCustomerBdField(ownerBd);
+      if (!resolved) {
+        return res.status(400).json({
+          success: false,
+          error: `无法解析人员字段 BD='${ownerBd}'（请确保该人员在飞书表/项目表里出现过一次，或配置 FEISHU_PERSON_ID_MAP）`,
+          known_names: known,
+        });
+      }
+      fields["主BD负责人"] = resolved;
+    }
 
     console.log("🟦 PUT /api/customers fields:", fields, "recordId=", recordId);
 
@@ -775,33 +802,63 @@ app.put("/api/projects/:projectId", async (req, res) => {
 
 
 // ====== 立项（Deals） ======
+const formatDateLoose = (v) => {
+  if (v === null || v === undefined) return "";
+  const str = String(v).trim();
+  if (!str || str === "0") return "";
+  const num = Number(str);
+  const isNum = !Number.isNaN(num);
+  if (isNum) {
+    const isMs = str.length >= 13 || num > 1e11;
+    const isSec = str.length === 10 || (num >= 1e9 && num < 2e10);
+    const isExcelSerial = num > 20000 && num < 60000; // roughly 1955-2070
+    if (isMs || isSec) {
+      const d = new Date(isMs ? num : num * 1000);
+      if (!Number.isNaN(d.getTime())) return d.toISOString().slice(0, 10);
+    }
+    if (isExcelSerial) {
+      const base = Date.UTC(1899, 11, 30); // Excel 序列号起点（含 1900 闰年 bug 修正）
+      const d = new Date(base + num * 24 * 60 * 60 * 1000);
+      if (!Number.isNaN(d.getTime())) return d.toISOString().slice(0, 10);
+    }
+    return str; // 其它数字原样返回，避免误改
+  }
+  if (/^\d{4}[-/]\d{1,2}[-/]\d{1,2}$/.test(str)) {
+    const d = new Date(str.replace(/\//g, "-"));
+    if (!Number.isNaN(d.getTime())) return d.toISOString().slice(0, 10);
+  }
+  return str;
+};
+
 function mapDealRecord(it) {
   const f = it?.fields || {};
+  const num = (v) => {
+    const n = Number(v);
+    return Number.isFinite(n) ? n : undefined;
+  };
   return {
+    serialNo: String(f["编号"] || "").trim(),
     dealId: String(f["立项ID"] || f.dealId || f.id || it.record_id || "").trim(),
-    projectId: String(
-      f["项目ID"] || f["客户ID"] || f.projectId || f.customerId || ""
-    ).trim(),
-    projectName: String(
-      f["项目名称"] || f.projectName || f["客户名称"] || ""
-    ).trim(),
+    projectId: String(f["项目ID"] || f.projectId || "").trim(),
+    customerId: String(f["客户ID"] || f.customerId || "").trim(),
+    projectName: String(f["项目名称"] || f.projectName || "").trim(),
     month: String(f["所属月份"] ?? f.month ?? "").trim(),
 
-    startDate: f["项目开始时间"] || f.startDate || "",
-    endDate: f["项目结束时间"] || f.endDate || "",
+    startDate: formatDateLoose(f["项目开始时间"] ?? f.startDate),
+    endDate: formatDateLoose(f["项目结束时间"] ?? f.endDate),
     isFinished: f["是否完结"] ?? f["是否完成"] ?? f.isFinished ?? "",
 
     signCompany: f["签约公司主体"] || f["签约主体"] || f.signCompany || "",
-    incomeWithTax: f["含税收入"] ?? f.incomeWithTax,
-    incomeWithoutTax: f["不含税收入"] ?? f.incomeWithoutTax,
-    estimatedCost: f["预计成本"] ?? f["预估成本"] ?? f.estimatedCost,
-    firstPaymentDate: f["预计首款时间"] || f.firstPaymentDate || "",
-    finalPaymentDate: f["预计尾款时间"] || f.finalPaymentDate || "",
-    receivedAmount: f["已收金额"] ?? f.receivedAmount,
-    grossProfit: f["毛利"] ?? f.grossProfit,
-    grossMargin: f["毛利率"] ?? f.grossMargin,
-    remainingReceivable: f["剩余应收金额"] ?? f.remainingReceivable,
-    thirdPartyCost: f["已付三方成本"] ?? f.thirdPartyCost,
+    incomeWithTax: num(f["含税收入"] ?? f.incomeWithTax),
+    incomeWithoutTax: num(f["不含税收入"] ?? f.incomeWithoutTax),
+    estimatedCost: num(f["预估成本"] ?? f.estimatedCost),
+    paidThirdPartyCost: num(f["已付三方成本"] ?? f.paidThirdPartyCost),
+    grossProfit: num(f["毛利"] ?? f.grossProfit),
+    grossMargin: num(f["毛利率"] ?? f.grossMargin),
+    firstPaymentDate: formatDateLoose(f["预计首款时间"] ?? f.firstPaymentDate),
+    finalPaymentDate: formatDateLoose(f["预计尾款时间"] ?? f.finalPaymentDate),
+    receivedAmount: num(f["已收金额"] ?? f.receivedAmount),
+    remainingReceivable: num(f["剩余应收金额"] ?? f.remainingReceivable),
   };
 }
 
@@ -877,6 +934,43 @@ async function getKnownPersonNames({ appToken, tableId, fieldName }) {
   return Array.from(map.keys()).sort((a, b) => a.localeCompare(b, "zh-CN"));
 }
 
+// 客户表 BD 解析：优先用客户表自身人员列，其次回退用项目表 BD 列（因为项目表通常已有人员选择，能拿到 user_id）
+async function resolveCustomerBdField(name) {
+  // 1) 尝试直接用客户表
+  const primary = await resolvePersonFieldValue({
+    appToken: process.env.FEISHU_BITABLE_APP_TOKEN,
+    tableId: process.env.FEISHU_BITABLE_TABLE_ID,
+    fieldName: "主BD负责人",
+    input: name,
+  });
+  if (primary) return { value: primary, known: await getKnownPersonNames({
+    appToken: process.env.FEISHU_BITABLE_APP_TOKEN,
+    tableId: process.env.FEISHU_BITABLE_TABLE_ID,
+    fieldName: "主BD负责人",
+  }) };
+
+  // 2) 回退：用项目表 BD 列里的人员，常见场景：客户表人员列为空，但项目表已经有 BD 人员
+  if (PROJECT_APP_TOKEN && PROJECT_TABLE_ID) {
+    const fallback = await resolvePersonFieldValue({
+      appToken: PROJECT_APP_TOKEN,
+      tableId: PROJECT_TABLE_ID,
+      fieldName: PROJECT_FIELD.bd,
+      input: name,
+    });
+    if (fallback) {
+      const known = await getKnownPersonNames({
+        appToken: PROJECT_APP_TOKEN,
+        tableId: PROJECT_TABLE_ID,
+        fieldName: PROJECT_FIELD.bd,
+      });
+      return { value: fallback, known };
+    }
+  }
+
+  // 3) 仍解析失败
+  return { value: null, known: [] };
+}
+
 async function findDealRecordIdByDealId(dealId) {
   if (!DEAL_APP_TOKEN || !DEAL_TABLE_ID) return null;
 
@@ -944,16 +1038,20 @@ app.post("/api/deals", async (req, res) => {
 
     const body = req.body || {};
     const dealId = String(body.dealId || "").trim();
-    const projectId = String(body.projectId || "").trim();
+    const projectId = String(body.projectId || "").trim(); // 兼容旧表单：如果表里没有字段，会自动忽略
+    const customerId = String(body.customerId || "").trim();
 
     if (!dealId)
       return res.status(400).json({ success: false, error: "missing dealId" });
-    if (!projectId)
-      return res
-        .status(400)
-        .json({ success: false, error: "missing projectId" });
 
     const fields = {};
+    const normalizeMonth = (v) => {
+      const s = String(v ?? "").trim();
+      if (!s) return undefined;
+      const m = s.match(/(?:^|\.)(\d{1,2})$/); // 取末尾的月份数字
+      const n = Number(m ? m[1] : s);
+      return Number.isFinite(n) ? n : s;
+    };
     const setIf = (name, value) => {
       const isEmptyString = typeof value === "string" && value.trim() === "";
       if (value === undefined || value === null || isEmptyString) return;
@@ -961,11 +1059,12 @@ app.post("/api/deals", async (req, res) => {
     };
 
     setIf("立项ID", dealId);
-    setIf(
-      "客户ID",
-      String(body.customerId || body.projectId || body.clientId || "").trim()
-    );
-    setIf("所属月份", body.month);
+    // 如果立项表没有“项目ID/项目名称”字段，以下两行会被忽略，不会写入
+    setIf("项目ID", projectId);
+    setIf("客户ID", customerId);
+    // setIf("项目名称", String(body.projectName || "").trim());
+    const monthVal = normalizeMonth(body.month);
+    if (monthVal !== undefined) setIf("所属月份", monthVal);
 
     setIf("项目开始时间", body.startDate);
     setIf("项目结束时间", body.endDate);
@@ -977,7 +1076,9 @@ app.post("/api/deals", async (req, res) => {
     if (body.incomeWithoutTax !== undefined && body.incomeWithoutTax !== "")
       setIf("不含税收入", Number(body.incomeWithoutTax));
     if (body.estimatedCost !== undefined && body.estimatedCost !== "")
-      setIf("预计成本", Number(body.estimatedCost));
+      setIf("预估成本", Number(body.estimatedCost));
+    if (body.paidThirdPartyCost !== undefined && body.paidThirdPartyCost !== "")
+      setIf("已付三方成本", Number(body.paidThirdPartyCost));
     if (body.receivedAmount !== undefined && body.receivedAmount !== "")
       setIf("已收金额", Number(body.receivedAmount));
 
@@ -1034,17 +1135,25 @@ app.put("/api/deals/:dealId", async (req, res) => {
 
     const body = req.body || {};
     const fields = {};
+    const normalizeMonth = (v) => {
+      const s = String(v ?? "").trim();
+      if (!s) return undefined;
+      const m = s.match(/(?:^|\.)(\d{1,2})$/);
+      const n = Number(m ? m[1] : s);
+      return Number.isFinite(n) ? n : s;
+    };
     const setIf = (name, value) => {
       const isEmptyString = typeof value === "string" && value.trim() === "";
       if (value === undefined || value === null || isEmptyString) return;
       fields[name] = value;
     };
 
-    setIf(
-      "客户ID",
-      String(body.customerId || body.projectId || body.clientId || "").trim()
-    );
-    setIf("所属月份", body.month);
+    // 如果表里没有项目ID/名称字段，这些会被忽略
+    setIf("项目ID", String(body.projectId || "").trim());
+    setIf("客户ID", String(body.customerId || "").trim());
+    // setIf("项目名称", String(body.projectName || "").trim());
+    const monthVal = normalizeMonth(body.month);
+    if (monthVal !== undefined) setIf("所属月份", monthVal);
     setIf("项目开始时间", body.startDate);
     setIf("项目结束时间", body.endDate);
     setIf("是否完结", body.isFinished);
@@ -1055,7 +1164,9 @@ app.put("/api/deals/:dealId", async (req, res) => {
     if (body.incomeWithoutTax !== undefined && body.incomeWithoutTax !== "")
       setIf("不含税收入", Number(body.incomeWithoutTax));
     if (body.estimatedCost !== undefined && body.estimatedCost !== "")
-      setIf("预计成本", Number(body.estimatedCost));
+      setIf("预估成本", Number(body.estimatedCost));
+    if (body.paidThirdPartyCost !== undefined && body.paidThirdPartyCost !== "")
+      setIf("已付三方成本", Number(body.paidThirdPartyCost));
     if (body.receivedAmount !== undefined && body.receivedAmount !== "")
       setIf("已收金额", Number(body.receivedAmount));
 
