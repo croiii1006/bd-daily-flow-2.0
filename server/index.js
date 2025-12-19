@@ -1025,15 +1025,11 @@ app.post("/api/deals", async (req, res) => {
 
     const body = req.body || {};
     const dealId = String(body.dealId || "").trim();
-    const projectId = String(body.projectId || "").trim();
+    const projectId = String(body.projectId || "").trim(); // 兼容旧表单：如果表里没有字段，会自动忽略
     const customerId = String(body.customerId || "").trim();
 
     if (!dealId)
       return res.status(400).json({ success: false, error: "missing dealId" });
-    if (!projectId)
-      return res
-        .status(400)
-        .json({ success: false, error: "missing projectId" });
 
     const fields = {};
     const normalizeMonth = (v) => {
@@ -1050,9 +1046,10 @@ app.post("/api/deals", async (req, res) => {
     };
 
     setIf("立项ID", dealId);
+    // 如果立项表没有“项目ID/项目名称”字段，以下两行会被忽略，不会写入
     setIf("项目ID", projectId);
     setIf("客户ID", customerId);
-    setIf("项目名称", String(body.projectName || "").trim());
+    // setIf("项目名称", String(body.projectName || "").trim());
     const monthVal = normalizeMonth(body.month);
     if (monthVal !== undefined) setIf("所属月份", monthVal);
 
@@ -1129,9 +1126,10 @@ app.put("/api/deals/:dealId", async (req, res) => {
       fields[name] = value;
     };
 
+    // 如果表里没有项目ID/名称字段，这些会被忽略
     setIf("项目ID", String(body.projectId || "").trim());
     setIf("客户ID", String(body.customerId || "").trim());
-    setIf("项目名称", String(body.projectName || "").trim());
+    // setIf("项目名称", String(body.projectName || "").trim());
     const monthVal = normalizeMonth(body.month);
     if (monthVal !== undefined) setIf("所属月份", monthVal);
     setIf("项目开始时间", body.startDate);
