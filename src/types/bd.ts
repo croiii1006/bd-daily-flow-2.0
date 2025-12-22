@@ -117,6 +117,42 @@ export interface DailyForm {
 
 /* ================= Reminder ================= */
 
+/** 提醒状态类型 */
+export type ReminderLevel = 'normal' | 'yellow' | 'red';
+
+/** 未立项项目提醒项 */
+export interface UnfinishedReminderItem {
+  projectId: string;
+  projectName: string;
+  customerId?: string;
+  shortName: string;
+  bd: string;
+  projectType: ProjectType;
+  stage: ProjectStage;
+  lastUpdateDate?: string;
+  nextFollowDate?: string;
+  daysSinceUpdate: number;
+  reminderLevel: ReminderLevel;
+  isFollowedUp?: boolean;
+}
+
+/** 已立项项目提醒项 */
+export interface FinishedReminderItem {
+  projectId: string;
+  dealId: string;
+  projectName: string;
+  customerId?: string;
+  shortName: string;
+  bd: string;
+  projectType: ProjectType;
+  stage: ProjectStage;
+  projectEndDate: string;
+  daysUntilEnd: number;
+  reminderLevel: ReminderLevel;
+  isFollowedUp?: boolean;
+}
+
+/** 兼容旧代码的 ReminderItem */
 export interface ReminderItem {
   projectId: string;
   projectName: string;

@@ -6,6 +6,12 @@ export const PROJECT_STAGE_OPTIONS = [
   '停滞',
 ] as const;
 
+export type TableColumn = {
+  key: string;
+  title: string;
+  headClassName?: string;
+};
+
 export type ProjectStage = (typeof PROJECT_STAGE_OPTIONS)[number];
 
 export const PROJECT_TYPE_OPTIONS = ['方案&报价', 'POC', '签单'] as const;
@@ -171,7 +177,7 @@ export const COMMUNICATION_DURATIONS = [
   '3小时以上',
 ] as const;
 
-export const PROJECT_TABLE_COLUMNS = [
+export const PROJECT_TABLE_COLUMNS: ReadonlyArray<TableColumn> = [
   { key: 'projectId', title: '项目ID', headClassName: 'w-[100px]' },
   { key: 'customerId', title: '客户ID', headClassName: 'w-[80px]' },
   { key: 'projectName', title: '项目名称', headClassName: 'w-[120px]' },
@@ -189,9 +195,9 @@ export const PROJECT_TABLE_COLUMNS = [
   { key: 'totalBdHours', title: '累计商务时间(hr)', headClassName: 'w-[130px]' },
   { key: 'lastUpdateDate', title: '最新更新日期', headClassName: 'w-[120px]' },
   { key: 'nextFollowDate', title: '下次跟进日期', headClassName: 'w-[120px]' },
-] as const;
+];
 
-export const REMINDER_TABLE_COLUMNS = [
+export const REMINDER_TABLE_COLUMNS: ReadonlyArray<TableColumn> = [
   { key: 'projectName', title: '项目名称' },
   { key: 'shortName', title: '客户', headClassName: 'w-[80px]' },
   { key: 'bd', title: 'BD', headClassName: 'w-[60px]' },
@@ -200,9 +206,9 @@ export const REMINDER_TABLE_COLUMNS = [
   { key: 'nextFollowDate', title: '下次跟进', headClassName: 'w-[100px]' },
   { key: 'reason', title: '提醒原因', headClassName: 'w-[120px]' },
   { key: 'action', title: '操作', headClassName: 'w-[80px]' },
-] as const;
+];
 
-export const DEAL_TABLE_COLUMNS = [
+export const DEAL_TABLE_COLUMNS: ReadonlyArray<TableColumn> = [
   { key: 'serialNo', title: '编号', headClassName: 'w-[90px]' },
   { key: 'dealId', title: '立项ID', headClassName: 'w-[120px]' },
   { key: 'customerId', title: '客户ID', headClassName: 'w-[120px]' },
@@ -221,9 +227,9 @@ export const DEAL_TABLE_COLUMNS = [
   { key: 'finalPaymentDate', title: '预计尾款时间', headClassName: 'w-[120px]' },
   { key: 'receivedAmount', title: '已收金额', headClassName: 'w-[110px] text-right' },
   { key: 'remainingReceivable', title: '剩余应收金额', headClassName: 'w-[120px] text-right' },
-] as const;
+];
 
-export const CUSTOMER_LIST_COLUMNS = [
+export const CUSTOMER_LIST_COLUMNS: ReadonlyArray<TableColumn> = [
   { key: 'customerId', title: '客户ID' },
   { key: 'shortName', title: '客户简称' },
   { key: 'brandName', title: '品牌/部门' },
@@ -231,17 +237,17 @@ export const CUSTOMER_LIST_COLUMNS = [
   { key: 'level', title: '客户等级' },
   { key: 'industry', title: '行业大类' },
   { key: 'bdOwner', title: '主BD' },
-] as const;
+];
 
-export const DAILY_SUMMARY_COLUMNS = [
+export const DAILY_SUMMARY_COLUMNS: ReadonlyArray<TableColumn> = [
   { key: 'date', title: '日期' },
   { key: 'projectName', title: '项目名称' },
   { key: 'communicationDuration', title: '沟通时长' },
   { key: 'taskSummary', title: '任务总结' },
   { key: 'action', title: '操作', headClassName: 'text-right' },
-] as const;
+];
 
-export const SIGNOFF_LIST_COLUMNS = [
+export const SIGNOFF_LIST_COLUMNS: ReadonlyArray<TableColumn> = [
   { key: 'projectName', title: '项目名称' },
   { key: 'customer', title: '客户' },
   { key: 'status', title: '立项状态' },
@@ -249,9 +255,9 @@ export const SIGNOFF_LIST_COLUMNS = [
   { key: 'incomeWithTax', title: '含税收入' },
   { key: 'receivedAmount', title: '已收金额' },
   { key: 'action', title: '操作', headClassName: 'text-right' },
-] as const;
+];
 
-export const LEGACY_PROJECT_LIST_COLUMNS = [
+export const LEGACY_PROJECT_LIST_COLUMNS: ReadonlyArray<TableColumn> = [
   { key: 'projectName', title: '项目名称' },
   { key: 'customer', title: '客户' },
   { key: 'projectCategory', title: '项目类别' },
@@ -260,4 +266,4 @@ export const LEGACY_PROJECT_LIST_COLUMNS = [
   { key: 'estimatedAmount', title: '预估金额' },
   { key: 'bd', title: 'BD' },
   { key: 'action', title: '操作', headClassName: 'text-right' },
-] as const;
+];

@@ -9,7 +9,16 @@
 
 import { mockDb } from '@/mock/bdMockData';
 import { feishuBitableApi } from '@/api/feishuBitableApi';
-import type { Client, Project, Deal, DailyFormData, ReminderItem } from '@/types/bd';
+import type {
+  Client,
+  Project,
+  Deal,
+  DailyFormData,
+  ReminderItem,
+  UnfinishedReminderItem,
+  FinishedReminderItem,
+  ReminderLevel,
+} from '@/types/bd';
 
 // 是否使用“前端直连飞书”的占位 API（当前实现是占位，不建议开启）
 const USE_FEISHU_API = false;
@@ -19,6 +28,30 @@ async function fetchJson(url: string, init?: RequestInit) {
   const json = await res.json().catch(() => null);
   return { res, json };
 }
+
+const parseDate = (value: string | Date | undefined | null) => {
+  if (!value) return null;
+  if (value instanceof Date) {
+    return new Date(value.getFullYear(), value.getMonth(), value.getDate());
+  }
+  let str = String(value).trim();
+  if (!str) return null;
+  str = str.replace(/[./]/g, '-');
+  if (/^\d{4}-\d{1,2}-\d{1,2}\s+\d/.test(str)) {
+    str = str.replace(' ', 'T');
+  }
+  const d = new Date(str);
+  if (Number.isNaN(d.getTime())) return null;
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate());
+};
+
+const getDaysDiff = (from: string | Date | undefined | null, to: string | Date | undefined | null) => {
+  const d1 = parseDate(from);
+  const d2 = parseDate(to);
+  if (!d1 || !d2) return 0;
+  const ms = d2.getTime() - d1.getTime();
+  return Math.floor(ms / (1000 * 60 * 60 * 24));
+};
 
 export const dataService = {
   // ==================== 客户操作 ====================
@@ -315,74 +348,156 @@ export const dataService = {
     return mockDb.createDailyForm(data);
   },
 
-  // ==================== 提醒相关 ====================
+  // ==================== ????????? ====================
 
-  /**
-   * 获取需要提醒的项目列表
-   * 条件：
-   * 1. stage ∈ ["未开始", "进行中", "FA", "停滞"] 且
-   * 2. nextFollowDate < 今天 或 lastUpdateDate 距今 > 5 天
-   */
-  async getReminderProjects(): Promise<ReminderItem[]> {
+  async getUnfinishedReminders(): Promise<UnfinishedReminderItem[]> {
     const projects = await this.getAllProjects();
     const today = new Date();
-    const targetStages = ['未开始', '进行中', 'FA', '停滞'];
+
+    const reminderProjectTypes = ['方案&报价', 'POC'];
+    const excludeStages = ['丢单'];
+    const reminderStages = ['未开始', '进行中', '停滞'];
 
     return projects
       .filter((p) => {
-        if (!targetStages.includes(p.stage)) return false;
-
-        if (p.nextFollowDate) {
-          const followDate = new Date(p.nextFollowDate.replace(/\//g, '-'));
-          if (followDate < today) return true;
-        }
+        const projectType = String(p.projectType || '').trim();
+        const stage = String(p.stage || '').trim();
+        if (!reminderProjectTypes.includes(projectType)) return false;
+        if (excludeStages.includes(stage)) return false;
+        if (!reminderStages.includes(stage)) return false;
 
         if (p.lastUpdateDate) {
-          const updateDate = new Date(p.lastUpdateDate.replace(/\//g, '-'));
-          const daysDiff = Math.floor(
-            (today.getTime() - updateDate.getTime()) / (1000 * 60 * 60 * 24)
-          );
-          if (daysDiff > 5) return true;
+          const daysSinceUpdate = getDaysDiff(p.lastUpdateDate, today);
+          if (daysSinceUpdate >= 4) return true;
         }
 
         return false;
       })
       .map((p) => {
-        let reason = '';
-        if (p.nextFollowDate) {
-          const followDate = new Date(p.nextFollowDate.replace(/\//g, '-'));
-          if (followDate < today) reason = '已过下次跟进日期';
-        }
-        if (!reason && p.lastUpdateDate) {
-          const updateDate = new Date(p.lastUpdateDate.replace(/\//g, '-'));
-          const daysDiff = Math.floor(
-            (today.getTime() - updateDate.getTime()) / (1000 * 60 * 60 * 24)
-          );
-          if (daysDiff > 5) reason = `${daysDiff} 天未更新`;
+        const daysSinceUpdate = p.lastUpdateDate ? getDaysDiff(p.lastUpdateDate, today) : 0;
+        let reminderLevel: ReminderLevel = 'normal';
+        if (daysSinceUpdate > 14) {
+          reminderLevel = 'red';
+        } else if (daysSinceUpdate > 7) {
+          reminderLevel = 'yellow';
         }
 
         return {
           projectId: p.projectId,
           projectName: p.projectName,
+          customerId: p.customerId || '',
           shortName: p.shortName,
           bd: p.bd,
+          projectType: p.projectType,
           stage: p.stage,
           lastUpdateDate: p.lastUpdateDate,
           nextFollowDate: p.nextFollowDate,
-          reason,
+          daysSinceUpdate,
+          reminderLevel,
         };
-      });
+      })
+      .sort((a, b) => b.daysSinceUpdate - a.daysSinceUpdate);
   },
 
-  /**
-   * 发送跟进提醒（预留）
-   */
+  async getFinishedReminders(): Promise<FinishedReminderItem[]> {
+    const projects = await this.getAllProjects();
+    const deals = await this.getAllDeals();
+    const today = new Date();
+
+    const projectMap = new Map(projects.map((p) => [p.projectId, p]));
+
+    return deals
+      .map((d) => {
+        const endDate = d.endDate || '';
+        if (!endDate) return null;
+
+        const isFinished = String(d.isFinished ?? '').trim();
+        if (isFinished && isFinished !== '否') return null;
+
+        const daysUntilEnd = getDaysDiff(today, endDate);
+        let reminderLevel: ReminderLevel = 'normal';
+        if (daysUntilEnd < 0) {
+          reminderLevel = 'red';
+        } else if (daysUntilEnd === 0) {
+          reminderLevel = 'yellow';
+        } else if (daysUntilEnd <= 7) {
+          reminderLevel = 'normal';
+        } else {
+          return null;
+        }
+
+        const p = projectMap.get(d.projectId);
+        return {
+          projectId: p?.projectId || d.projectId || d.dealId,
+          dealId: d.dealId,
+          projectName: p?.projectName || d.projectName || d.dealId,
+          customerId: p?.customerId || d.customerId || '',
+          shortName: p?.shortName || '',
+          bd: p?.bd || '',
+          projectType: p?.projectType || '签单',
+          stage: p?.stage || '未开始',
+          projectEndDate: endDate,
+          daysUntilEnd,
+          reminderLevel,
+        } as FinishedReminderItem;
+      })
+      .filter(Boolean) as FinishedReminderItem[];
+  },
+
+  async confirmFollowUp(projectId: string): Promise<boolean> {
+    if (USE_FEISHU_API) {
+      return feishuBitableApi.sendFollowupReminder(projectId);
+    }
+    console.log('[DataService] confirmFollowUp called for:', projectId);
+    return true;
+  },
+
+  async getReminderProjects(): Promise<ReminderItem[]> {
+    const unfinished = await this.getUnfinishedReminders();
+    return unfinished.map((p) => ({
+      projectId: p.projectId,
+      projectName: p.projectName,
+      shortName: p.shortName,
+      bd: p.bd,
+      stage: p.stage,
+      lastUpdateDate: p.lastUpdateDate,
+      nextFollowDate: p.nextFollowDate,
+      reason: `${p.daysSinceUpdate} 天未更新`,
+    }));
+  },
+
   async sendFollowupReminder(projectId: string): Promise<boolean> {
     if (USE_FEISHU_API) {
       return feishuBitableApi.sendFollowupReminder(projectId);
     }
     console.log('[DataService] sendFollowupReminder called for:', projectId);
     return true;
+  },
+
+async sendDailyReminders(): Promise<{ bd: string; count: number; projects: string[] }[]> {
+    const unfinished = await this.getUnfinishedReminders();
+    const finished = await this.getFinishedReminders();
+    
+    // 按 BD 分组
+    const bdReminderMap = new Map<string, string[]>();
+    
+    [...unfinished, ...finished].forEach(item => {
+      if (!bdReminderMap.has(item.bd)) {
+        bdReminderMap.set(item.bd, []);
+      }
+      bdReminderMap.get(item.bd)!.push(item.projectName);
+    });
+
+    const results: { bd: string; count: number; projects: string[] }[] = [];
+    
+    for (const [bd, projects] of bdReminderMap) {
+      // TODO: 未来接入飞书消息 API
+      // await feishuBitableApi.sendDailyReminderNotification(bd, projects);
+      console.log(`[DataService] 发送每日提醒给 ${bd}:`, projects);
+      results.push({ bd, count: projects.length, projects });
+    }
+    
+    return results;
   },
 };
 
