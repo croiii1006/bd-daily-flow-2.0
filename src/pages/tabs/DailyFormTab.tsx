@@ -72,8 +72,9 @@ type UpdateProjectDraft = NewProjectDraft & { projectId: string }; // ⚠️ 不
 
 type DealDraft = {
   localId: string;
-  dealId: string; // ⚠️ 不可变
+  dealId: string; // immutable
   projectId: string;
+  customerId: string;
   projectName: string;
   startDate: string;
   endDate: string;
@@ -82,6 +83,7 @@ type DealDraft = {
   incomeWithTax: string;
   incomeWithoutTax: string;
   estimatedCost: string;
+  paidThirdPartyCost: string;
   firstPaymentDate: string;
   finalPaymentDate: string;
   receivedAmount: string;
@@ -235,6 +237,7 @@ const dealToDraft = (deal: Deal): DealDraft => ({
   localId: makeLocalId(),
   dealId: String((deal as any).dealId || "").trim(),
   projectId: String((deal as any).projectId || "").trim(),
+  customerId: String((deal as any).customerId || "").trim(),
   projectName: String((deal as any).projectName || "").trim(),
   startDate: String((deal as any).startDate || "").trim(),
   endDate: String((deal as any).endDate || "").trim(),
@@ -243,6 +246,7 @@ const dealToDraft = (deal: Deal): DealDraft => ({
   incomeWithTax: (deal as any).incomeWithTax != null ? String((deal as any).incomeWithTax) : "",
   incomeWithoutTax: (deal as any).incomeWithoutTax != null ? String((deal as any).incomeWithoutTax) : "",
   estimatedCost: (deal as any).estimatedCost != null ? String((deal as any).estimatedCost) : "",
+  paidThirdPartyCost: (deal as any).paidThirdPartyCost != null ? String((deal as any).paidThirdPartyCost) : "",
   firstPaymentDate: String((deal as any).firstPaymentDate || "").trim(),
   finalPaymentDate: String((deal as any).finalPaymentDate || "").trim(),
   receivedAmount: (deal as any).receivedAmount != null ? String((deal as any).receivedAmount) : "0",
@@ -427,43 +431,6 @@ export default function DailyFormTab() {
     }
   }, [hasUpdateDeal]);
 
-  useEffect(() => {
-    if (hasUpdateProject !== "yes") return;
-
-    const candidates = [...updateProjectDrafts, ...(updateProjectDraft ? [updateProjectDraft] : [])];
-    const needDealsFor = candidates
-      .filter((p) => p.projectType === "签单")
-      .filter((p) => !deals.some((d: any) => String((d as any).projectId) === p.projectId));
-
-    setPendingNewDeals((prev) => {
-      const next = (prev || []).filter((d) => needDealsFor.some((p) => p.projectId === d.projectId));
-      for (const p of needDealsFor) {
-        const idx = next.findIndex((d) => d.projectId === p.projectId);
-        const projectName = projectNameFromDraft(p);
-        if (idx >= 0) {
-          next[idx] = { ...next[idx], projectName };
-          continue;
-        }
-        next.push({
-          localId: makeLocalId(),
-          dealId: makeDealId(),
-          projectId: p.projectId,
-          projectName,
-          startDate: "",
-          endDate: "",
-          isFinished: "否",
-          contractEntity: "",
-          incomeWithTax: "",
-          incomeWithoutTax: "",
-          estimatedCost: "",
-          firstPaymentDate: "",
-          finalPaymentDate: "",
-          receivedAmount: "0",
-        });
-      }
-      return next;
-    });
-  }, [hasUpdateProject, updateProjectDrafts, updateProjectDraft, deals]);
 
   const clientSearchResults = useMemo(() => {
     const k = clientSearchKeyword.trim().toLowerCase();
@@ -710,6 +677,7 @@ export default function DailyFormTab() {
       return;
     }
 
+    
     if (currentStep === 4) {
       if (hasUpdateProject === "yes") {
         const candidates = [...updateProjectDrafts, ...(updateProjectDraft ? [updateProjectDraft] : [])];
@@ -718,9 +686,10 @@ export default function DailyFormTab() {
           const p = candidates[i];
           if (isBlank(p.projectId) || !validateNewProject(p)) return toast.error(`第 ${i + 1} 条项目必填项未填完整（带 * 的必填）`);
         }
-        for (let i = 0; i < pendingNewDeals.length; i += 1) {
-          if (!validateDealDraft(pendingNewDeals[i])) return toast.error(`第 ${i + 1} 条立项信息未填完整（带 * 的必填）`);
-        }
+        const signedTransitions = candidates.filter((p) => {
+          const origin = projects.find((x: any) => String(x.projectId) === p.projectId);
+          return p.projectType === "签单" && String(origin?.projectType || "") !== "签单";
+        });
         try {
           for (const p of candidates) {
             await dataService.updateProject(p.projectId, {
@@ -742,31 +711,45 @@ export default function DailyFormTab() {
               nextFollowDate: p.nextFollowDate,
             } as any);
           }
-          for (const d of pendingNewDeals) {
-            await dataService.createDeal({
-              dealId: d.dealId,
-              projectId: d.projectId,
-              projectName: d.projectName,
-              startDate: d.startDate,
-              endDate: d.endDate,
-              isFinished: d.isFinished,
-              signCompany: d.contractEntity,
-              contractEntity: d.contractEntity,
-              incomeWithTax: numOrUndef(d.incomeWithTax),
-              incomeWithoutTax: numOrUndef(d.incomeWithoutTax),
-              estimatedCost: numOrUndef(d.estimatedCost),
-              receivedAmount: numOrUndef(d.receivedAmount),
-              firstPaymentDate: d.firstPaymentDate,
-              finalPaymentDate: d.finalPaymentDate,
-              month: "",
-            } as any);
+
+          let nextPendingDeals: DealDraft[] = [];
+          if (signedTransitions.length > 0) {
+            const latestDeals = await dataService.getAllDeals();
+            setDeals(latestDeals || []);
+            nextPendingDeals = signedTransitions.map((p) => {
+              const related = (latestDeals || []).find((d: any) => String(d.projectId) === p.projectId) as any;
+              const projectName = projectNameFromDraft(p);
+              const dealId = String(related?.dealId || p.projectId || "").trim();
+              const customerId = String(related?.customerId || p.customerId || "").trim();
+              return {
+                localId: makeLocalId(),
+                dealId,
+                projectId: p.projectId,
+                customerId,
+                projectName,
+                startDate: String(related?.startDate || "").trim(),
+                endDate: String(related?.endDate || "").trim(),
+                isFinished: String(related?.isFinished ?? "").trim() || "否",
+                contractEntity: String(related?.contractEntity || related?.signCompany || "").trim(),
+                incomeWithTax: related?.incomeWithTax != null ? String(related.incomeWithTax) : "",
+                incomeWithoutTax: related?.incomeWithoutTax != null ? String(related.incomeWithoutTax) : "",
+                estimatedCost: related?.estimatedCost != null ? String(related.estimatedCost) : "",
+                paidThirdPartyCost: related?.paidThirdPartyCost != null ? String(related.paidThirdPartyCost) : "",
+                firstPaymentDate: String(related?.firstPaymentDate || "").trim(),
+                finalPaymentDate: String(related?.finalPaymentDate || "").trim(),
+                receivedAmount: related?.receivedAmount != null ? String(related.receivedAmount) : "0",
+              };
+            });
           }
+
+          setPendingNewDeals(nextPendingDeals);
           toast.success(`项目更新成功（已写回飞书）：${candidates.length} 条`);
-          if (pendingNewDeals.length) toast.success(`签单项目已自动立项：${pendingNewDeals.length} 条`);
+          if (nextPendingDeals.length) {
+            toast.success(`签单项目已在飞书创建立项：${nextPendingDeals.length} 条，请补充立项信息`);
+          }
           setUpdateProjectDrafts([]);
           setUpdateProjectDraft(null);
           setProjectSearchKeyword("");
-          setPendingNewDeals([]);
           await loadData();
         } catch (e: any) {
           console.error(e);
@@ -778,6 +761,36 @@ export default function DailyFormTab() {
     }
 
     if (currentStep === 5) {
+      if (pendingNewDeals.length > 0) {
+        for (let i = 0; i < pendingNewDeals.length; i += 1) {
+          const d = pendingNewDeals[i];
+          if (!validateDealDraft(d)) return toast.error(`第 ${i + 1} 条立项信息未填完整（带 * 的必填）`);
+          if (isBlank(d.customerId)) return toast.error(`第 ${i + 1} 条立项客户ID为空，请稍后重试`);
+        }
+        try {
+          for (const d of pendingNewDeals) {
+            const { dealId, ...patch } = d;
+            await dataService.updateDeal(dealId, {
+              ...patch,
+              customerId: d.customerId || undefined,
+              signCompany: d.contractEntity,
+              contractEntity: d.contractEntity,
+              incomeWithTax: numOrUndef(d.incomeWithTax),
+              incomeWithoutTax: numOrUndef(d.incomeWithoutTax),
+              estimatedCost: numOrUndef(d.estimatedCost),
+              paidThirdPartyCost: numOrUndef(d.paidThirdPartyCost),
+              receivedAmount: numOrUndef(d.receivedAmount),
+            } as any);
+          }
+          toast.success(`立项信息已同步飞书：${pendingNewDeals.length} 条`);
+          setPendingNewDeals([]);
+          await loadData();
+        } catch (e: any) {
+          console.error(e);
+          return toast.error(e?.message || "同步立项失败");
+        }
+      }
+
       if (hasUpdateDeal === "yes") {
         const candidates = [...updateDealDrafts, ...(updateDealDraft ? [updateDealDraft] : [])];
         if (candidates.length === 0) return toast.error("请至少选择 1 条要更新的立项");
@@ -789,26 +802,29 @@ export default function DailyFormTab() {
             const { dealId, ...patch } = d;
             await dataService.updateDeal(dealId, {
               ...patch,
+              customerId: d.customerId || undefined,
               signCompany: d.contractEntity,
               contractEntity: d.contractEntity,
               incomeWithTax: numOrUndef(d.incomeWithTax),
               incomeWithoutTax: numOrUndef(d.incomeWithoutTax),
               estimatedCost: numOrUndef(d.estimatedCost),
+              paidThirdPartyCost: numOrUndef(d.paidThirdPartyCost),
               receivedAmount: numOrUndef(d.receivedAmount),
             } as any);
           }
-          toast.success(`立项更新成功（已写回飞书）：${candidates.length} 条`);
+          toast.success(`项目更新成功（已写回飞书）：${candidates.length} 条`);
           setUpdateDealDrafts([]);
           setUpdateDealDraft(null);
           setDealSearchKeyword("");
           await loadData();
         } catch (e: any) {
           console.error(e);
-          return toast.error(e?.message || "更新立项失败");
+          return toast.error(e?.message || "同步立项失败");
         }
       }
       setCurrentStep(6);
     }
+
   };
 
   return (
@@ -1508,6 +1524,9 @@ export default function DailyFormTab() {
                             列选择一次对应人员，或配置后端 `FEISHU_PERSON_ID_MAP`。
                           </div>
                         )}
+
+
+                    
                       </div>
                       <div className="space-y-2">
                         <Label>累计商务时间（hr）</Label>
@@ -1549,68 +1568,26 @@ export default function DailyFormTab() {
                         <Plus className="mr-1 h-4 w-4" /> 添加一个要更新的项目
                       </Button>
                     </div>
-
-                    {updateProjectDrafts.length > 0 && (
-                      <div className="space-y-2">
-                        <Label>待更新项目列表</Label>
-                        {updateProjectDrafts.map((p, idx) => (
-                          <div key={p.localId} className="flex items-center justify-between gap-3 rounded-md border px-3 py-2">
-                            <div className="min-w-0">
-                              <div className="text-sm font-medium truncate">{idx + 1}. {projectNameFromDraft(p)}</div>
-                              <div className="text-xs text-muted-foreground truncate">项目ID: {p.projectId}</div>
-                            </div>
-                            <Button type="button" variant="ghost" size="sm" onClick={() => setUpdateProjectDrafts((prev) => prev.filter((x) => x.localId !== p.localId))}>
-                              移除
-                            </Button>
-                          </div>
-                        ))}
-                      </div>
-                    )}
                   </div>
                 )}
 
-                {pendingNewDeals.length > 0 && (
-                  <div className="space-y-3 rounded-lg border p-4">
-                    <div className="text-sm font-medium">签单项目需要立项信息（将自动写回立项表）</div>
-                    {pendingNewDeals.map((d, idx) => (
-                      <div key={d.projectId} className="rounded-md border p-3 space-y-3">
-                        <div className="text-sm font-medium">{idx + 1}. {d.projectName}</div>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                          <div className="space-y-2 sm:col-span-2">
-                            <Label>立项ID（系统生成，不可修改）*</Label>
-                            <Input value={d.dealId} disabled />
-                          </div>
-                          <div className="space-y-2 sm:col-span-2">
-                            <Label>项目ID（不可修改）*</Label>
-                            <Input value={d.projectId} disabled />
-                          </div>
-                          <div className="space-y-2">
-                            <Label>项目开始时间 *</Label>
-                            <Input type="date" value={slashToInputDate(d.startDate)} onChange={(e) => setPendingNewDeals((prev) => prev.map((x) => x.projectId === d.projectId ? { ...x, startDate: inputDateToSlash(e.target.value) } : x))} />
-                          </div>
-                          <div className="space-y-2">
-                            <Label>项目结束时间 *</Label>
-                            <Input type="date" value={slashToInputDate(d.endDate)} onChange={(e) => setPendingNewDeals((prev) => prev.map((x) => x.projectId === d.projectId ? { ...x, endDate: inputDateToSlash(e.target.value) } : x))} />
-                          </div>
-                          <div className="space-y-2">
-                            <Label>是否完结 *</Label>
-                            <OptionSelect value={d.isFinished} onValueChange={(v) => setPendingNewDeals((prev) => prev.map((x) => x.projectId === d.projectId ? { ...x, isFinished: v } : x))} placeholder="选择" options={COMPLETION_STATUS} />
-                          </div>
-                          <div className="space-y-2">
-                            <Label>签约公司主体 *</Label>
-                            <OptionSelect value={d.contractEntity} onValueChange={(v) => setPendingNewDeals((prev) => prev.map((x) => x.projectId === d.projectId ? { ...x, contractEntity: v } : x))} placeholder="选择签约主体" options={CONTRACT_ENTITIES} />
-                          </div>
-                          <div className="space-y-2"><Label>含税收入</Label><Input type="number" value={d.incomeWithTax} onChange={(e) => setPendingNewDeals((prev) => prev.map((x) => x.projectId === d.projectId ? { ...x, incomeWithTax: e.target.value } : x))} /></div>
-                          <div className="space-y-2"><Label>不含税收入</Label><Input type="number" value={d.incomeWithoutTax} onChange={(e) => setPendingNewDeals((prev) => prev.map((x) => x.projectId === d.projectId ? { ...x, incomeWithoutTax: e.target.value } : x))} /></div>
-                          <div className="space-y-2"><Label>预估成本</Label><Input type="number" value={d.estimatedCost} onChange={(e) => setPendingNewDeals((prev) => prev.map((x) => x.projectId === d.projectId ? { ...x, estimatedCost: e.target.value } : x))} /></div>
-                          <div className="space-y-2"><Label>已收金额</Label><Input type="number" value={d.receivedAmount} onChange={(e) => setPendingNewDeals((prev) => prev.map((x) => x.projectId === d.projectId ? { ...x, receivedAmount: e.target.value } : x))} /></div>
-                          <div className="space-y-2"><Label>预计首款时间</Label><Input type="date" value={slashToInputDate(d.firstPaymentDate)} onChange={(e) => setPendingNewDeals((prev) => prev.map((x) => x.projectId === d.projectId ? { ...x, firstPaymentDate: inputDateToSlash(e.target.value) } : x))} /></div>
-                          <div className="space-y-2"><Label>预计尾款时间</Label><Input type="date" value={slashToInputDate(d.finalPaymentDate)} onChange={(e) => setPendingNewDeals((prev) => prev.map((x) => x.projectId === d.projectId ? { ...x, finalPaymentDate: inputDateToSlash(e.target.value) } : x))} /></div>
+                {updateProjectDrafts.length > 0 && (
+                  <div className="space-y-2">
+                    <Label>待更新项目列表</Label>
+                    {updateProjectDrafts.map((p, idx) => (
+                      <div key={p.localId} className="flex items-center justify-between gap-3 rounded-md border px-3 py-2">
+                        <div className="min-w-0">
+                          <div className="text-sm font-medium truncate">{idx + 1}. {projectNameFromDraft(p)}</div>
+                          <div className="text-xs text-muted-foreground truncate">项目ID: {p.projectId}</div>
                         </div>
+                        <Button type="button" variant="ghost" size="sm" onClick={() => setUpdateProjectDrafts((prev) => prev.filter((x) => x.localId !== p.localId))}>
+                          删除
+                        </Button>
                       </div>
                     ))}
                   </div>
                 )}
+
               </div>
             )}
 
@@ -1635,16 +1612,53 @@ export default function DailyFormTab() {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <RadioGroup value={hasUpdateDeal} onValueChange={setHasUpdateDeal}>
-              <div className="flex items-center space-x-2">
-                <RadioGroupItem value="no" id="s5-no" />
-                <Label htmlFor="s5-no">否</Label>
+
+            
+            {pendingNewDeals.length > 0 && (
+              <div className="space-y-3 rounded-lg border p-4">
+                <div className="text-sm font-medium">签单项目需要补充立项信息（将同步写回立项表）</div>
+                {pendingNewDeals.map((d, idx) => (
+                  <div key={d.projectId} className="rounded-md border p-3 space-y-3">
+                    <div className="text-sm font-medium">{idx + 1}. {d.projectName}</div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div className="space-y-2 sm:col-span-2">
+                        <Label>立项ID（默认项目ID，不可修改）*</Label>
+                        <Input value={d.dealId} disabled />
+                      </div>
+                      <div className="space-y-2 sm:col-span-2">
+                        <Label>客户ID（来自飞书，不可修改）*</Label>
+                        <Input value={d.customerId} disabled />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>项目开始时间 *</Label>
+                        <Input type="date" value={slashToInputDate(d.startDate)} onChange={(e) => setPendingNewDeals((prev) => prev.map((x) => x.projectId === d.projectId ? { ...x, startDate: inputDateToSlash(e.target.value) } : x))} />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>项目结束时间 *</Label>
+                        <Input type="date" value={slashToInputDate(d.endDate)} onChange={(e) => setPendingNewDeals((prev) => prev.map((x) => x.projectId === d.projectId ? { ...x, endDate: inputDateToSlash(e.target.value) } : x))} />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>是否完结 *</Label>
+                        <OptionSelect value={d.isFinished} onValueChange={(v) => setPendingNewDeals((prev) => prev.map((x) => x.projectId === d.projectId ? { ...x, isFinished: v } : x))} placeholder="选择" options={COMPLETION_STATUS} />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>签约公司主体 *</Label>
+                        <OptionSelect value={d.contractEntity} onValueChange={(v) => setPendingNewDeals((prev) => prev.map((x) => x.projectId === d.projectId ? { ...x, contractEntity: v } : x))} placeholder="选择签约主体" options={CONTRACT_ENTITIES} />
+                      </div>
+                      <div className="space-y-2"><Label>含税收入</Label><Input type="number" value={d.incomeWithTax} onChange={(e) => setPendingNewDeals((prev) => prev.map((x) => x.projectId === d.projectId ? { ...x, incomeWithTax: e.target.value } : x))} /></div>
+                      <div className="space-y-2"><Label>不含税收入</Label><Input type="number" value={d.incomeWithoutTax} onChange={(e) => setPendingNewDeals((prev) => prev.map((x) => x.projectId === d.projectId ? { ...x, incomeWithoutTax: e.target.value } : x))} /></div>
+                      <div className="space-y-2"><Label>预估成本</Label><Input type="number" value={d.estimatedCost} onChange={(e) => setPendingNewDeals((prev) => prev.map((x) => x.projectId === d.projectId ? { ...x, estimatedCost: e.target.value } : x))} /></div>
+                      <div className="space-y-2"><Label>已付第三方成本</Label><Input type="number" value={d.paidThirdPartyCost} onChange={(e) => setPendingNewDeals((prev) => prev.map((x) => x.projectId === d.projectId ? { ...x, paidThirdPartyCost: e.target.value } : x))} /></div>
+                      <div className="space-y-2"><Label>已收金额</Label><Input type="number" value={d.receivedAmount} onChange={(e) => setPendingNewDeals((prev) => prev.map((x) => x.projectId === d.projectId ? { ...x, receivedAmount: e.target.value } : x))} /></div>
+                      <div className="space-y-2"><Label>预计首款时间</Label><Input type="date" value={slashToInputDate(d.firstPaymentDate)} onChange={(e) => setPendingNewDeals((prev) => prev.map((x) => x.projectId === d.projectId ? { ...x, firstPaymentDate: inputDateToSlash(e.target.value) } : x))} /></div>
+                      <div className="space-y-2"><Label>预计尾款时间</Label><Input type="date" value={slashToInputDate(d.finalPaymentDate)} onChange={(e) => setPendingNewDeals((prev) => prev.map((x) => x.projectId === d.projectId ? { ...x, finalPaymentDate: inputDateToSlash(e.target.value) } : x))} /></div>
+                    </div>
+                  </div>
+                ))}
               </div>
-              <div className="flex items-center space-x-2">
-                <RadioGroupItem value="yes" id="s5-yes" />
-                <Label htmlFor="s5-yes">是</Label>
-              </div>
-            </RadioGroup>
+            )}
+
+
 
             {hasUpdateDeal === "yes" && (
               <div className="space-y-4 pt-4 border-t">
@@ -1680,6 +1694,7 @@ export default function DailyFormTab() {
                       <div className="space-y-2"><Label>含税收入</Label><Input type="number" value={updateDealDraft.incomeWithTax} onChange={(e) => setUpdateDealDraft({ ...updateDealDraft, incomeWithTax: e.target.value })} /></div>
                       <div className="space-y-2"><Label>不含税收入</Label><Input type="number" value={updateDealDraft.incomeWithoutTax} onChange={(e) => setUpdateDealDraft({ ...updateDealDraft, incomeWithoutTax: e.target.value })} /></div>
                       <div className="space-y-2"><Label>预估成本</Label><Input type="number" value={updateDealDraft.estimatedCost} onChange={(e) => setUpdateDealDraft({ ...updateDealDraft, estimatedCost: e.target.value })} /></div>
+                      <div className="space-y-2"><Label>已付第三方成本</Label><Input type="number" value={updateDealDraft.paidThirdPartyCost} onChange={(e) => setUpdateDealDraft({ ...updateDealDraft, paidThirdPartyCost: e.target.value })} /></div>
                       <div className="space-y-2"><Label>已收金额</Label><Input type="number" value={updateDealDraft.receivedAmount} onChange={(e) => setUpdateDealDraft({ ...updateDealDraft, receivedAmount: e.target.value })} /></div>
                       <div className="space-y-2"><Label>预计首款时间</Label><Input type="date" value={slashToInputDate(updateDealDraft.firstPaymentDate)} onChange={(e) => setUpdateDealDraft({ ...updateDealDraft, firstPaymentDate: inputDateToSlash(e.target.value) })} /></div>
                       <div className="space-y-2"><Label>预计尾款时间</Label><Input type="date" value={slashToInputDate(updateDealDraft.finalPaymentDate)} onChange={(e) => setUpdateDealDraft({ ...updateDealDraft, finalPaymentDate: inputDateToSlash(e.target.value) })} /></div>

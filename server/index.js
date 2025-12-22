@@ -1052,11 +1052,37 @@ app.post("/api/deals", async (req, res) => {
       const n = Number(m ? m[1] : s);
       return Number.isFinite(n) ? n : s;
     };
+
+    const toUnixTs = (v) => {
+      if (v === undefined || v === null) return undefined;
+      if (typeof v === "number" && Number.isFinite(v)) return v < 1e11 ? v * 1000 : v;
+      const s = String(v).trim();
+      if (!s) return undefined;
+      if (/^\d+$/.test(s)) {
+        const num = Number(s);
+        if (!Number.isFinite(num)) return undefined;
+        return num < 1e11 ? num * 1000 : num;
+      }
+      const d = new Date(s.replace(/\//g, "-"));
+      if (Number.isNaN(d.getTime())) return undefined;
+      return d.getTime();
+    };
+
+    const items = await listFields({ appToken: DEAL_APP_TOKEN, tableId: DEAL_TABLE_ID });
+    const fieldNames = new Set((items || []).map((f) => f.field_name));
+    const warnings = [];
+
+    
     const setIf = (name, value) => {
       const isEmptyString = typeof value === "string" && value.trim() === "";
       if (value === undefined || value === null || isEmptyString) return;
+      if (!fieldNames.has(name)) {
+        warnings.push(`field not found: ${name}`);
+        return;
+      }
       fields[name] = value;
     };
+
 
     setIf("立项ID", dealId);
     // 如果立项表没有“项目ID/项目名称”字段，以下两行会被忽略，不会写入
@@ -1066,8 +1092,8 @@ app.post("/api/deals", async (req, res) => {
     const monthVal = normalizeMonth(body.month);
     if (monthVal !== undefined) setIf("所属月份", monthVal);
 
-    setIf("项目开始时间", body.startDate);
-    setIf("项目结束时间", body.endDate);
+    setIf("项目开始时间", toUnixTs(body.startDate));
+    setIf("项目结束时间", toUnixTs(body.endDate));
     setIf("是否完结", body.isFinished);
     setIf("签约公司主体", body.signCompany);
 
@@ -1091,8 +1117,8 @@ app.post("/api/deals", async (req, res) => {
     if (body.remainingReceivable !== undefined && body.remainingReceivable !== "")
       setIf("剩余应收金额", Number(body.remainingReceivable));
 
-    setIf("预计首款时间", body.firstPaymentDate);
-    setIf("预计尾款时间", body.finalPaymentDate);
+    setIf("预计首款时间", toUnixTs(body.firstPaymentDate));
+    setIf("预计尾款时间", toUnixTs(body.finalPaymentDate));
 
     console.log("🟧 POST /api/deals fields:", fields);
 
@@ -1111,7 +1137,7 @@ app.post("/api/deals", async (req, res) => {
       });
     }
 
-    return res.json({ success: true, record_id: recordId, data, fields });
+    return res.json({ success: true, record_id: recordId, data, fields, warnings });
   } catch (e) {
     console.error("POST /api/deals failed:", e);
     return res.status(500).json({ success: false, error: String(e) });
@@ -1142,11 +1168,37 @@ app.put("/api/deals/:dealId", async (req, res) => {
       const n = Number(m ? m[1] : s);
       return Number.isFinite(n) ? n : s;
     };
+
+    const toUnixTs = (v) => {
+      if (v === undefined || v === null) return undefined;
+      if (typeof v === "number" && Number.isFinite(v)) return v < 1e11 ? v * 1000 : v;
+      const s = String(v).trim();
+      if (!s) return undefined;
+      if (/^\d+$/.test(s)) {
+        const num = Number(s);
+        if (!Number.isFinite(num)) return undefined;
+        return num < 1e11 ? num * 1000 : num;
+      }
+      const d = new Date(s.replace(/\//g, "-"));
+      if (Number.isNaN(d.getTime())) return undefined;
+      return d.getTime();
+    };
+
+    const items = await listFields({ appToken: DEAL_APP_TOKEN, tableId: DEAL_TABLE_ID });
+    const fieldNames = new Set((items || []).map((f) => f.field_name));
+    const warnings = [];
+
+    
     const setIf = (name, value) => {
       const isEmptyString = typeof value === "string" && value.trim() === "";
       if (value === undefined || value === null || isEmptyString) return;
+      if (!fieldNames.has(name)) {
+        warnings.push(`field not found: ${name}`);
+        return;
+      }
       fields[name] = value;
     };
+
 
     // 如果表里没有项目ID/名称字段，这些会被忽略
     setIf("项目ID", String(body.projectId || "").trim());
@@ -1154,8 +1206,8 @@ app.put("/api/deals/:dealId", async (req, res) => {
     // setIf("项目名称", String(body.projectName || "").trim());
     const monthVal = normalizeMonth(body.month);
     if (monthVal !== undefined) setIf("所属月份", monthVal);
-    setIf("项目开始时间", body.startDate);
-    setIf("项目结束时间", body.endDate);
+    setIf("项目开始时间", toUnixTs(body.startDate));
+    setIf("项目结束时间", toUnixTs(body.endDate));
     setIf("是否完结", body.isFinished);
     setIf("签约公司主体", body.signCompany);
 
@@ -1179,8 +1231,8 @@ app.put("/api/deals/:dealId", async (req, res) => {
     if (body.remainingReceivable !== undefined && body.remainingReceivable !== "")
       setIf("剩余应收金额", Number(body.remainingReceivable));
 
-    setIf("预计首款时间", body.firstPaymentDate);
-    setIf("预计尾款时间", body.finalPaymentDate);
+    setIf("预计首款时间", toUnixTs(body.firstPaymentDate));
+    setIf("预计尾款时间", toUnixTs(body.finalPaymentDate));
 
     console.log("🟧 PUT /api/deals fields:", fields, "recordId=", recordId);
 
@@ -1191,7 +1243,7 @@ app.put("/api/deals/:dealId", async (req, res) => {
       fields,
     });
 
-    return res.json({ success: true, record_id: recordId, data, fields });
+    return res.json({ success: true, record_id: recordId, data, fields, warnings });
   } catch (e) {
     console.error("PUT /api/deals/:dealId failed:", e);
     return res.status(500).json({ success: false, error: String(e) });
