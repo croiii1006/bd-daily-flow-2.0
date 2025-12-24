@@ -21,6 +21,7 @@ export interface Client {
 
   owner?: string;            // ✅ 展示/筛选用：主BD姓名（UI 用）
   ownerUserId?: string;      // ✅ 写回飞书用：主BD user_id
+  ownerOpenId?: string;      // openId for UserProfile
 
   relatedProjectIds?: string[]; // ✅ 展示用：关联项目
 
@@ -52,6 +53,7 @@ export interface Project {
   priority: ProjectPriority;
 
   bd: string;
+  bdOpenId?: string;
   am?: string;
 
   month: string;
@@ -127,6 +129,7 @@ export interface UnfinishedReminderItem {
   customerId?: string;
   shortName: string;
   bd: string;
+  bdOpenId?: string;
   projectType: ProjectType;
   stage: ProjectStage;
   lastUpdateDate?: string;
@@ -144,6 +147,7 @@ export interface FinishedReminderItem {
   customerId?: string;
   shortName: string;
   bd: string;
+  bdOpenId?: string;
   projectType: ProjectType;
   stage: ProjectStage;
   projectEndDate: string;
@@ -158,6 +162,7 @@ export interface ReminderItem {
   projectName: string;
   shortName: string;
   bd: string;
+  bdOpenId?: string;
   stage: ProjectStage;
   lastUpdateDate?: string;
   nextFollowDate?: string;

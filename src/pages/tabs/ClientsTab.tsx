@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { feishuApi } from "@/api/feishuApi";
 import type { Client } from "@/types/bd";
 
@@ -12,10 +12,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
 
 import { Search, Building2, User, MapPin, Tag } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { initUserProfileFromWindow, renderUserProfile } from "@/lib/feishuUserProfile";
 
 /**
  * ✅ 唯一入口：把后端/飞书返回的“各种字段形态”统一映射为 bd.ts 的 Client
@@ -37,6 +40,14 @@ function pickPeopleFirstName(v: any): string {
   if (typeof v === "string") return v.trim();
   if (Array.isArray(v) && v[0]?.name) return String(v[0].name).trim();
   if (typeof v === "object" && v.name) return String(v.name).trim();
+  return "";
+}
+
+function pickPeopleFirstOpenId(v: any): string {
+  if (!v) return "";
+  if (typeof v === "string") return v.trim();
+  if (Array.isArray(v) && v[0]?.openId) return String(v[0].openId).trim();
+  if (typeof v === "object" && v.openId) return String(v.openId).trim();
   return "";
 }
 
@@ -100,12 +111,68 @@ export function feishuToClient(c: any): Client {
     industry,
     hq,
     owner,
+    ownerOpenId: pickPeopleFirstOpenId(fields?.ownerOpenId ?? c?.ownerOpenId) || "",
     relatedProjectIds,
     // 兼容字段
     customerId: String(id || ""),
   };
 }
 
+
+type UserProfileNameProps = {
+  name: string;
+  openId?: string;
+  className?: string;
+};
+
+const UserProfileName: React.FC<UserProfileNameProps> = ({ name, openId, className }) => {
+  const [open, setOpen] = useState(false);
+  const mountRef = useRef<HTMLDivElement | null>(null);
+  const instanceRef = useRef<{ unmount?: () => void } | null>(null);
+
+  useEffect(() => {
+    if (!open || !openId || !mountRef.current) return;
+    const ready = initUserProfileFromWindow();
+    if (!ready) return;
+    instanceRef.current = renderUserProfile(openId, mountRef.current);
+    return () => {
+      instanceRef.current?.unmount?.();
+      instanceRef.current = null;
+    };
+  }, [open, openId]);
+
+  const handleOpenChange = (nextOpen: boolean) => {
+    if (!nextOpen) {
+      instanceRef.current?.unmount?.();
+      instanceRef.current = null;
+    } else if (!initUserProfileFromWindow()) {
+      return;
+    }
+    setOpen(nextOpen);
+  };
+
+  if (!openId) {
+    return <span className={className}>{name || "-"}</span>;
+  }
+
+  return (
+    <Popover open={open} onOpenChange={handleOpenChange}>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          className={cn("text-primary underline underline-offset-2", className)}
+          onClick={(e) => e.stopPropagation()}
+          onPointerDown={(e) => e.stopPropagation()}
+        >
+          {name || "-"}
+        </button>
+      </PopoverTrigger>
+      <PopoverContent align="start" className="w-[360px] p-2">
+        <div ref={mountRef} />
+      </PopoverContent>
+    </Popover>
+  );
+};
 
 const ClientsTab: React.FC = () => {
   const [clients, setClients] = useState<Client[]>([]);
@@ -339,7 +406,7 @@ const ClientsTab: React.FC = () => {
                 </span>
                 <span className="flex items-center gap-1">
                   <User className="h-3 w-3" />
-                  {client.owner || "-"}
+                  <UserProfileName name={client.owner || "-"} openId={client.ownerOpenId} />
                 </span>
               </div>
 

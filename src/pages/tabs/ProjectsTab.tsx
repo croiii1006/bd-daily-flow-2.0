@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+﻿import React, { useState, useEffect, useRef } from 'react';
 import { dataService } from '@/services/dataService';
 import type { Project, ProjectStage, ProjectPriority } from '@/types/bd';
 import {
@@ -6,22 +6,76 @@ import {
   MONTH_OPTIONS,
   PROJECT_STAGE_BADGE_CLASS,
   PROJECT_STAGE_OPTIONS,
-  PROJECT_TABLE_COLUMNS,
   PROJECT_TYPE_OPTIONS,
   PROJECT_PRIORITY_OPTIONS,
 } from '@/config/bdOptions';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Search, Calendar, LayoutGrid, Table2, FolderKanban } from 'lucide-react';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Search, Calendar, FolderKanban } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { initUserProfileFromWindow, renderUserProfile } from '@/lib/feishuUserProfile';
 // 飞书时间戳兜底展示
 import { formatDateSafe } from '@/lib/date';
+
+type UserProfileNameProps = {
+  name: string;
+  openId?: string;
+  className?: string;
+};
+
+const UserProfileName: React.FC<UserProfileNameProps> = ({ name, openId, className }) => {
+  const [open, setOpen] = useState(false);
+  const mountRef = useRef<HTMLDivElement | null>(null);
+  const instanceRef = useRef<{ unmount?: () => void } | null>(null);
+
+  useEffect(() => {
+    if (!open || !openId || !mountRef.current) return;
+    const ready = initUserProfileFromWindow();
+    if (!ready) return;
+    instanceRef.current = renderUserProfile(openId, mountRef.current);
+    return () => {
+      instanceRef.current?.unmount?.();
+      instanceRef.current = null;
+    };
+  }, [open, openId]);
+
+  const handleOpenChange = (nextOpen: boolean) => {
+    if (!nextOpen) {
+      instanceRef.current?.unmount?.();
+      instanceRef.current = null;
+    } else if (!initUserProfileFromWindow()) {
+      return;
+    }
+    setOpen(nextOpen);
+  };
+
+  if (!openId) {
+    return <span className={className}>{name || '-'}</span>;
+  }
+
+  return (
+    <Popover open={open} onOpenChange={handleOpenChange}>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          className={cn('text-primary underline underline-offset-2', className)}
+          onClick={(e) => e.stopPropagation()}
+          onPointerDown={(e) => e.stopPropagation()}
+        >
+          {name || '-'}
+        </button>
+      </PopoverTrigger>
+      <PopoverContent align="start" className="w-[360px] p-2">
+        <div ref={mountRef} />
+      </PopoverContent>
+    </Popover>
+  );
+};
 
 const ProjectsTab: React.FC = () => {
   const [projects, setProjects] = useState<Project[]>([]);
@@ -32,8 +86,6 @@ const ProjectsTab: React.FC = () => {
   const [priorityFilter, setPriorityFilter] = useState<string>('all');
   const [bdFilter, setBdFilter] = useState<string>('all');
   const [monthFilter, setMonthFilter] = useState<string>('all');
-  const [pcView, setPcView] = useState<'table' | 'cards'>('table');
-
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
   const [showDetail, setShowDetail] = useState(false);
 
@@ -146,7 +198,7 @@ const ProjectsTab: React.FC = () => {
                   ))}
                 </SelectContent>
               </Select>
-              <Select value={priorityFilter} onValueChange={setPriorityFilter}>
+                            <Select value={priorityFilter} onValueChange={setPriorityFilter}>
                 <SelectTrigger className="w-[100px]">
                   <SelectValue placeholder="优先级" />
                 </SelectTrigger>
@@ -159,6 +211,7 @@ const ProjectsTab: React.FC = () => {
                   ))}
                 </SelectContent>
               </Select>
+
               <Select value={bdFilter} onValueChange={setBdFilter}>
                 <SelectTrigger className="w-[100px]">
                   <SelectValue placeholder="BD" />
@@ -185,188 +238,59 @@ const ProjectsTab: React.FC = () => {
                   ))}
                 </SelectContent>
               </Select>
-
-              {/* PC 视图切换：表格 / 卡片 */}
-              <div className="hidden md:flex items-center gap-2 ml-auto">
-                <Button
-                  type="button"
-                  size="sm"
-                  variant={pcView === 'table' ? 'default' : 'outline'}
-                  onClick={() => setPcView('table')}
-                >
-                  <Table2 className="h-4 w-4 mr-2" />
-                  表格
-                </Button>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant={pcView === 'cards' ? 'default' : 'outline'}
-                  onClick={() => setPcView('cards')}
-                >
-                  <LayoutGrid className="h-4 w-4 mr-2" />
-                  卡片
-                </Button>
-              </div>
+              <div className="hidden md:flex items-center gap-2 ml-auto" />
             </div>
           </div>
         </CardContent>
       </Card>
 
-      {/* 项目表格 - PC端 */}
-      {pcView === 'table' && (
-      <div className="hidden md:block">
-        <Card>
-          <CardContent className="p-0">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  {PROJECT_TABLE_COLUMNS.map((c) => (
-                    <TableHead key={c.key} className={c.headClassName}>
-                      {c.title}
-                    </TableHead>
-                  ))}
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredProjects.map((project) => (
-                  <TableRow
-                    key={project.projectId}
-                    className="cursor-pointer hover:bg-muted/50"
-                    onClick={() => handleProjectClick(project)}
-                  >
-                    <TableCell className="font-mono text-xs">{project.projectId}</TableCell>
-                    <TableCell className="text-xs">{project.customerId || '-'}</TableCell>
-                    <TableCell className="max-w-[220px] truncate" title={project.projectName}>
-                      {project.projectName || '-'}
-                    </TableCell>
-                    <TableCell className="text-xs">{project.shortName || '-'}</TableCell>
-                    <TableCell className="text-xs">{project.campaignName || '-'}</TableCell>
-                    <TableCell className="text-xs">{project.deliverableName || '-'}</TableCell>
-                    <TableCell className="text-xs">{project.month || '-'}</TableCell>
-                    <TableCell className="text-xs">{project.serviceType || '-'}</TableCell>
-                    <TableCell>
-                      <Badge variant="outline" className="text-xs">
-                        {project.projectType || '-'}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant="outline" className={cn('text-xs', getStageBadgeClass(project.stage))}>
-                        {project.stage || '-'}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant={getPriorityBadgeVariant(project.priority)} className="text-xs">
-                        {project.priority || '-'}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-xs">{project.expectedAmount ?? '-'}</TableCell>
-                    <TableCell className="text-xs">{project.bd || '-'}</TableCell>
-                    <TableCell className="text-xs">{project.am || '-'}</TableCell>
-                    <TableCell className="text-xs">{project.totalBdHours ?? '-'}</TableCell>
-                    <TableCell className="text-xs text-muted-foreground">
-                      {formatDateSafe(project.lastUpdateDate) || '-'}
-                    </TableCell>
-                    <TableCell className="text-xs text-muted-foreground">
-                      {formatDateSafe(project.nextFollowDate) || '-'}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
-      </div>
-      )}
-
-      {/* 项目卡片 - PC端 */}
-      {pcView === 'cards' && (
-        <div className="hidden md:grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {filteredProjects.map((project) => (
-            <Card
-              key={project.projectId}
-              className="cursor-pointer transition-all hover:shadow-md hover:border-primary/50"
-              onClick={() => handleProjectClick(project)}
-            >
-              <CardContent className="pt-4">
-                <div className="flex items-start justify-between mb-2 gap-2">
-                  <div className="min-w-0">
-                    <div className="font-medium text-sm line-clamp-2">
-                      {project.projectName || '-'}
-                    </div>
-                    <div className="text-xs text-muted-foreground mt-1 font-mono">
-                      {project.projectId}
-                    </div>
-                  </div>
-                  <Badge
-                    variant={getPriorityBadgeVariant(project.priority)}
-                    className="text-xs shrink-0"
-                  >
-                    {project.priority || '-'}
-                  </Badge>
-                </div>
-
-                <div className="flex flex-wrap gap-2 mt-3">
-                  <Badge variant="outline" className="text-xs">
-                    {project.shortName || '-'}
-                  </Badge>
-                  <Badge variant="outline" className="text-xs">
-                    {project.serviceType || '-'}
-                  </Badge>
-                  <Badge
-                    variant="outline"
-                    className={cn('text-xs', getStageBadgeClass(project.stage))}
-                  >
-                    {project.stage || '-'}
-                  </Badge>
-                </div>
-
-                <div className="flex items-center justify-between mt-3 text-xs text-muted-foreground">
-                  <span>BD: {project.bd || '-'}</span>
-                  <span className="flex items-center gap-1">
-                    <Calendar className="h-3 w-3" />
-                    {formatDateSafe(project.nextFollowDate) || '未设置'}
-                  </span>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      )}
-
-      {/* 项目卡片 - 移动端 */}
-      <div className="md:hidden space-y-3">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {filteredProjects.map((project) => (
           <Card
             key={project.projectId}
-            className="cursor-pointer"
+            className="cursor-pointer transition-all hover:shadow-md hover:border-primary/50"
             onClick={() => handleProjectClick(project)}
           >
             <CardContent className="pt-4">
-              <div className="flex items-start justify-between mb-2">
-                <div>
-                  <div className="font-medium text-sm line-clamp-2">{project.projectName}</div>
-                  <div className="text-xs text-muted-foreground mt-1">{project.projectId}</div>
+              <div className="flex items-start justify-between mb-2 gap-2">
+                <div className="min-w-0">
+                  <div className="font-medium text-sm line-clamp-2">
+                    {project.projectName || '-'}
+                  </div>
+                  <div className="text-xs text-muted-foreground mt-1 font-mono">
+                    {project.projectId}
+                  </div>
                 </div>
-                <Badge variant={getPriorityBadgeVariant(project.priority)} className="text-xs shrink-0 ml-2">
-                  {project.priority}
+                <Badge
+                  variant={getPriorityBadgeVariant(project.priority)}
+                  className="text-xs shrink-0"
+                >
+                  {project.priority || '-'}
                 </Badge>
               </div>
+
               <div className="flex flex-wrap gap-2 mt-3">
                 <Badge variant="outline" className="text-xs">
-                  {project.shortName}
+                  {project.shortName || '-'}
                 </Badge>
                 <Badge variant="outline" className="text-xs">
-                  {project.serviceType}
+                  {project.serviceType || '-'}
                 </Badge>
-                <Badge variant="outline" className={cn('text-xs', getStageBadgeClass(project.stage))}>
-                  {project.stage}
+                <Badge
+                  variant="outline"
+                  className={cn('text-xs', getStageBadgeClass(project.stage))}
+                >
+                  {project.stage || '-'}
                 </Badge>
               </div>
+
               <div className="flex items-center justify-between mt-3 text-xs text-muted-foreground">
-                <span>BD: {project.bd}</span>
+                <span>
+                  BD: <UserProfileName name={project.bd || '-'} openId={project.bdOpenId} />
+                </span>
                 <span className="flex items-center gap-1">
                   <Calendar className="h-3 w-3" />
-                  {formatDateSafe(project.nextFollowDate) || '未设置'}
+                  {formatDateSafe(project.nextFollowDate) || '-'}
                 </span>
               </div>
             </CardContent>
@@ -379,6 +303,8 @@ const ProjectsTab: React.FC = () => {
       )}
 
       {/* 详情弹窗 */}
+            {/* 详情弹窗 */}
+            {/* 详情弹窗 */}
       <Dialog open={showDetail} onOpenChange={setShowDetail}>
         <DialogContent className="max-w-3xl max-h-[90vh]">
           <DialogHeader>
@@ -473,11 +399,11 @@ const ProjectsTab: React.FC = () => {
                         <span>{selectedProject.expectedAmount ?? '-'}</span>
                       </div>
                       <div>
-                        <span className="text-muted-foreground">累计商务时间（hr）：</span>
+                        <span className="text-muted-foreground">累计商务时间(hr)：</span>
                         <span>{selectedProject.totalBdHours ?? '-'}</span>
                       </div>
                       <div>
-                        <span className="text-muted-foreground">最新更新日期：</span>
+                        <span className="text-muted-foreground">最近更新日期：</span>
                         <span>{formatDateSafe(selectedProject.lastUpdateDate) || '-'}</span>
                       </div>
                       <div>
@@ -492,6 +418,9 @@ const ProjectsTab: React.FC = () => {
           )}
         </DialogContent>
       </Dialog>
+
+
+
     </div>
   );
 };

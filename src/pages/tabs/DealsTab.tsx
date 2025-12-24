@@ -1,12 +1,11 @@
 ﻿import React, { useState, useEffect } from 'react';
 import { dataService } from '@/services/dataService';
 import type { Deal, Project } from '@/types/bd';
-import { DEAL_TABLE_COLUMNS, MONTH_OPTIONS } from '@/types/bd';
+import { MONTH_OPTIONS } from '@/types/bd';
 import { Card, CardContent } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
-import { FileCheck, TrendingUp, TrendingDown } from 'lucide-react';
 // 飞书时间戳兜底展示
 import { formatDateSafe } from '@/lib/date';
 
@@ -15,6 +14,8 @@ const DealsTab: React.FC = () => {
   const [projects, setProjects] = useState<Project[]>([]);
   const [filteredDeals, setFilteredDeals] = useState<Deal[]>([]);
   const [monthFilter, setMonthFilter] = useState<string>('all');
+  const [selectedDeal, setSelectedDeal] = useState<Deal | null>(null);
+  const [showDetail, setShowDetail] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -61,61 +62,15 @@ const DealsTab: React.FC = () => {
     return new Intl.NumberFormat('zh-CN', { style: 'currency', currency: 'CNY', minimumFractionDigits: 0 }).format(n);
   };
 
-  const formatPercent = (value?: number | string): string => {
-    if (value === undefined || value === null || value === '') return '-';
-    const n = Number(value);
-    if (!Number.isFinite(n)) return String(value);
-    return `${(n * 100).toFixed(1)}%`;
+  const renderFinishStatus = (raw: any) => {
+    if (raw === true || raw === 'true' || raw === '是') return '已完结';
+    if (raw === false || raw === 'false' || raw === '否') return '进行中';
+    return raw || '-';
   };
 
-  const renderCell = (deal: Deal, key: string) => {
-    const raw = (deal as any)[key];
-    switch (key) {
-      case 'serialNo':
-        return raw ?? '';
-      case 'dealId':
-      case 'projectId':
-      case 'customerId':
-      case 'projectName':
-      case 'month':
-        return raw ?? '';
-      case 'startDate':
-      case 'endDate':
-      case 'firstPaymentDate':
-      case 'finalPaymentDate':
-        return formatDateSafe(raw) || '-';
-      case 'isFinished':
-        if (raw === true || raw === 'true' || raw === '是') return '是';
-        if (raw === false || raw === 'false' || raw === '否') return '否';
-        return raw || '-';
-      case 'signCompany':
-        return raw || '-';
-      case 'grossMargin':
-        return (
-          raw !== undefined &&
-          raw !== null &&
-          raw !== '' && (
-            <Badge
-              variant="outline"
-              className={
-                Number(raw) >= 0.3 ? 'text-success border-success/30' : 'text-warning border-warning/30'
-              }
-            >
-              {formatPercent(raw)}
-            </Badge>
-          )
-        );
-      case 'incomeWithTax':
-      case 'incomeWithoutTax':
-      case 'estimatedCost':
-      case 'paidThirdPartyCost':
-      case 'grossProfit':
-      case 'receivedAmount':
-      case 'remainingReceivable':
-        return formatCurrency(raw);
-      default:
-        return raw ?? '-';
-    }
+  const handleDealClick = (deal: Deal) => {
+    setSelectedDeal(deal);
+    setShowDetail(true);
   };
 
   // 统计数据
@@ -172,87 +127,39 @@ const DealsTab: React.FC = () => {
         </Card>
       </div>
 
-      {/* 立项表格 - PC端 */}
-      <div className="hidden md:block">
-        <Card>
-          <CardContent className="p-0">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  {DEAL_TABLE_COLUMNS.map((c) => (
-                    <TableHead key={c.key} className={c.headClassName}>
-                      {c.title}
-                    </TableHead>
-                  ))}
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredDeals.map((deal, idx) => {
-                  const rowKey = `${deal.dealId || 'deal'}-${deal.projectId || idx}`;
-                  return (
-                    <TableRow key={rowKey}>
-                      {DEAL_TABLE_COLUMNS.map((c) => (
-                        <TableCell key={c.key} className="text-xs">
-                          {c.key === 'projectName'
-                            ? getProjectName(deal)
-                            : renderCell(deal, c.key)}
-                        </TableCell>
-                      ))}
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* 立项卡片 - 移动端 */}
-      <div className="md:hidden space-y-3">
-        {filteredDeals.map((deal, idx) => (
-          <Card key={`${deal.dealId || 'deal'}-${deal.projectId || idx}`}>
-            <CardContent className="pt-4">
-              <div className="flex items-start justify-between mb-2">
-                <div>
-                  <div className="font-medium text-sm line-clamp-2">{getProjectName(deal)}</div>
-                  <div className="text-xs text-muted-foreground mt-1">
-                    立项ID: {deal.dealId} · 项目ID: {deal.projectId}
+      {/* 立项卡片 */}
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        {filteredDeals.map((deal, idx) => {
+          const finishText = renderFinishStatus(deal.isFinished);
+          const finishVariant = finishText === '已完结' ? 'default' : 'secondary';
+          return (
+            <Card
+              key={`${deal.dealId || 'deal'}-${deal.projectId || idx}`}
+              className="cursor-pointer transition-all hover:shadow-md hover:border-primary/50"
+              onClick={() => handleDealClick(deal)}
+            >
+              <CardContent className="pt-4">
+                <div className="flex items-start justify-between mb-2 gap-2">
+                  <div className="min-w-0">
+                    <div className="font-medium text-sm line-clamp-2">{getProjectName(deal)}</div>
+                    <div className="text-xs text-muted-foreground mt-1">
+                      立项ID: {deal.dealId || '-'}
+                    </div>
                   </div>
-                  <div className="text-xs text-muted-foreground mt-1">
-                    客户ID: {deal.customerId || '-'}
-                  </div>
-                </div>
-                {deal.grossMargin !== undefined && (
-                  <Badge 
-                    variant="outline" 
-                    className={deal.grossMargin >= 0.3 ? 'text-success border-success/30' : 'text-warning border-warning/30'}
-                  >
-                    {formatPercent(deal.grossMargin)}
+                  <Badge variant={finishVariant} className="text-xs shrink-0">
+                    {finishText}
                   </Badge>
-                )}
-              </div>
-              <div className="grid grid-cols-2 gap-2 mt-3 text-xs">
-                <div><span className="text-muted-foreground">所属月份：</span>{deal.month ?? ''}</div>
-                <div><span className="text-muted-foreground">是否完结：</span>{renderCell(deal, 'isFinished') as any}</div>
-                <div><span className="text-muted-foreground">项目开始：</span>{formatDateSafe(deal.startDate) || '-'}</div>
-                <div><span className="text-muted-foreground">项目结束：</span>{formatDateSafe(deal.endDate) || '-'}</div>
-                <div><span className="text-muted-foreground">含税收入：</span><span className="font-medium">{formatCurrency(deal.incomeWithTax)}</span></div>
-                <div><span className="text-muted-foreground">不含税收入：</span>{formatCurrency(deal.incomeWithoutTax)}</div>
-                <div><span className="text-muted-foreground">预估成本：</span>{formatCurrency(deal.estimatedCost)}</div>
-                <div><span className="text-muted-foreground">已付三方：</span>{formatCurrency(deal.paidThirdPartyCost)}</div>
-                <div><span className="text-muted-foreground">毛利：</span>{formatCurrency(deal.grossProfit)}</div>
-                <div><span className="text-muted-foreground">毛利率：</span>{formatPercent(deal.grossMargin)}</div>
-                <div><span className="text-muted-foreground">已收金额：</span><span className="text-success">{formatCurrency(deal.receivedAmount)}</span></div>
-                <div><span className="text-muted-foreground">剩余应收：</span><span className="text-warning">{formatCurrency(deal.remainingReceivable)}</span></div>
-                <div><span className="text-muted-foreground">预计首款：</span>{formatDateSafe(deal.firstPaymentDate) || '-'}</div>
-                <div><span className="text-muted-foreground">预计尾款：</span>{formatDateSafe(deal.finalPaymentDate) || '-'}</div>
-              </div>
-              <div className="mt-2 text-xs text-muted-foreground">
-                签约主体：{deal.signCompany || '-'}
-              </div>
-            </CardContent>
-          </Card>
-        ))}
+                </div>
+                <div className="mt-3 text-xs text-muted-foreground space-y-1">
+                  <div>
+                    含税收入：<span className="text-foreground">{formatCurrency(deal.incomeWithTax)}</span>
+                  </div>
+                  <div>签约主体：{deal.signCompany || '-'}</div>
+                </div>
+              </CardContent>
+            </Card>
+          );
+        })}
       </div>
 
       {filteredDeals.length === 0 && (
@@ -260,6 +167,62 @@ const DealsTab: React.FC = () => {
           暂无立项数据
         </div>
       )}
+
+      <Dialog open={showDetail} onOpenChange={setShowDetail}>
+        <DialogContent className="max-w-2xl max-h-[90vh]">
+          <DialogHeader>
+            <DialogTitle>{selectedDeal ? getProjectName(selectedDeal) : '立项详情'}</DialogTitle>
+          </DialogHeader>
+          {selectedDeal && (
+            <div className="grid grid-cols-2 gap-3 text-sm">
+              <div>
+                <span className="text-muted-foreground">立项ID：</span>
+                <span className="font-mono">{selectedDeal.dealId || '-'}</span>
+              </div>
+              <div>
+                <span className="text-muted-foreground">项目ID：</span>
+                <span className="font-mono">{selectedDeal.projectId || '-'}</span>
+              </div>
+              <div className="col-span-2">
+                <span className="text-muted-foreground">项目名称：</span>
+                <span>{getProjectName(selectedDeal)}</span>
+              </div>
+              <div>
+                <span className="text-muted-foreground">是否完结：</span>
+                <span>{renderFinishStatus(selectedDeal.isFinished)}</span>
+              </div>
+              <div>
+                <span className="text-muted-foreground">所属月份：</span>
+                <span>{selectedDeal.month || '-'}</span>
+              </div>
+              <div>
+                <span className="text-muted-foreground">项目开始：</span>
+                <span>{formatDateSafe(selectedDeal.startDate) || '-'}</span>
+              </div>
+              <div>
+                <span className="text-muted-foreground">项目结束：</span>
+                <span>{formatDateSafe(selectedDeal.endDate) || '-'}</span>
+              </div>
+              <div>
+                <span className="text-muted-foreground">含税收入：</span>
+                <span>{formatCurrency(selectedDeal.incomeWithTax)}</span>
+              </div>
+              <div>
+                <span className="text-muted-foreground">不含税收入：</span>
+                <span>{formatCurrency(selectedDeal.incomeWithoutTax)}</span>
+              </div>
+              <div>
+                <span className="text-muted-foreground">签约主体：</span>
+                <span>{selectedDeal.signCompany || '-'}</span>
+              </div>
+              <div>
+                <span className="text-muted-foreground">客户ID：</span>
+                <span>{selectedDeal.customerId || '-'}</span>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

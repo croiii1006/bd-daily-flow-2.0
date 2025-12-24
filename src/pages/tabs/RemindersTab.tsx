@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { dataService } from '@/services/dataService';
 import type { UnfinishedReminderItem, FinishedReminderItem, ReminderLevel } from '@/types/bd';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -7,11 +7,67 @@ import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Bell, AlertTriangle, Calendar, Clock, CheckCircle2, FileText, FolderOpen } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
-// 飞书时间戳兜底展示
+import { initUserProfileFromWindow, renderUserProfile } from '@/lib/feishuUserProfile';
 import { formatDateSafe } from '@/lib/date';
+
+type UserProfileNameProps = {
+  name: string;
+  openId?: string;
+  className?: string;
+};
+
+const UserProfileName: React.FC<UserProfileNameProps> = ({ name, openId, className }) => {
+  const [open, setOpen] = useState(false);
+  const mountRef = useRef<HTMLDivElement | null>(null);
+  const instanceRef = useRef<{ unmount?: () => void } | null>(null);
+
+  useEffect(() => {
+    if (!open || !openId || !mountRef.current) return;
+    const ready = initUserProfileFromWindow();
+    if (!ready) return;
+    instanceRef.current = renderUserProfile(openId, mountRef.current);
+    return () => {
+      instanceRef.current?.unmount?.();
+      instanceRef.current = null;
+    };
+  }, [open, openId]);
+
+  const handleOpenChange = (nextOpen: boolean) => {
+    if (!nextOpen) {
+      instanceRef.current?.unmount?.();
+      instanceRef.current = null;
+    } else if (!initUserProfileFromWindow()) {
+      return;
+    }
+    setOpen(nextOpen);
+  };
+
+  if (!openId) {
+    return <span className={className}>{name || '-'}</span>;
+  }
+
+  return (
+    <Popover open={open} onOpenChange={handleOpenChange}>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          className={cn('text-primary underline underline-offset-2', className)}
+          onClick={(e) => e.stopPropagation()}
+          onPointerDown={(e) => e.stopPropagation()}
+        >
+          {name || '-'}
+        </button>
+      </PopoverTrigger>
+      <PopoverContent align="start" className="w-[360px] p-2">
+        <div ref={mountRef} />
+      </PopoverContent>
+    </Popover>
+  );
+};
 
 const RemindersTab: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'unfinished' | 'finished'>('unfinished');
@@ -89,19 +145,27 @@ const RemindersTab: React.FC = () => {
 
   const getStageBadgeClass = (stage: string) => {
     switch (stage) {
-      case 'POC': return 'bg-warning/10 text-warning border-warning/30';
-      case '谈判': return 'bg-success/10 text-success border-success/30';
-      case '方案&报价': return 'bg-primary/10 text-primary border-primary/30';
-      case '需求确认': return 'bg-info/10 text-info border-info/30';
-      default: return '';
+      case 'POC':
+        return 'bg-warning/10 text-warning border-warning/30';
+      case '谈判':
+        return 'bg-success/10 text-success border-success/30';
+      case '方案&报价':
+        return 'bg-primary/10 text-primary border-primary/30';
+      case '需求确认':
+        return 'bg-info/10 text-info border-info/30';
+      default:
+        return '';
     }
   };
 
   const getProjectTypeBadgeClass = (type: string) => {
     switch (type) {
-      case 'POC': return 'bg-warning/10 text-warning border-warning/30';
-      case '签单': return 'bg-success/10 text-success border-success/30';
-      default: return 'bg-muted text-muted-foreground border-muted-foreground/30';
+      case 'POC':
+        return 'bg-warning/10 text-warning border-warning/30';
+      case '签单':
+        return 'bg-success/10 text-success border-success/30';
+      default:
+        return 'bg-muted text-muted-foreground border-muted-foreground/30';
     }
   };
 
@@ -204,7 +268,9 @@ const RemindersTab: React.FC = () => {
                               {item.projectName}
                             </TableCell>
                             <TableCell>{item.shortName}</TableCell>
-                            <TableCell>{item.bd}</TableCell>
+                            <TableCell>
+                              <UserProfileName name={item.bd || '-'} openId={item.bdOpenId} />
+                            </TableCell>
                             <TableCell>
                               <Badge variant="outline" className={cn('text-xs', getProjectTypeBadgeClass(item.projectType))}>
                                 {item.projectType}
@@ -252,12 +318,12 @@ const RemindersTab: React.FC = () => {
                         <div className="flex-1 min-w-0">
                           <div className="font-medium text-sm line-clamp-2">{item.projectName}</div>
                           <div className="text-xs text-muted-foreground mt-1">
-                            {item.shortName} · {item.bd}
+                            {item.shortName} - <UserProfileName name={item.bd || '-'} openId={item.bdOpenId} />
                           </div>
                         </div>
                         {getReminderBadge(item.reminderLevel)}
                       </div>
-                      
+
                       <div className="flex flex-wrap gap-2 mt-2">
                         <Badge variant="outline" className={cn('text-xs', getProjectTypeBadgeClass(item.projectType))}>
                           {item.projectType}
@@ -337,7 +403,9 @@ const RemindersTab: React.FC = () => {
                               {item.projectName}
                             </TableCell>
                             <TableCell>{item.shortName}</TableCell>
-                            <TableCell>{item.bd}</TableCell>
+                            <TableCell>
+                              <UserProfileName name={item.bd || '-'} openId={item.bdOpenId} />
+                            </TableCell>
                             <TableCell>
                               <Badge variant="outline" className={cn('text-xs', getProjectTypeBadgeClass(item.projectType))}>
                                 {item.projectType}
@@ -351,13 +419,13 @@ const RemindersTab: React.FC = () => {
                             <TableCell className="text-xs">
                               <div>{formatDateSafe(item.projectEndDate) || '-'}</div>
                               <div className={cn(
-                                item.daysUntilEnd < 0 ? 'text-destructive' : 
+                                item.daysUntilEnd < 0 ? 'text-destructive' :
                                 item.daysUntilEnd === 0 ? 'text-warning' : 'text-muted-foreground'
                               )}>
-                                {item.daysUntilEnd < 0 
-                                  ? `(已过期${Math.abs(item.daysUntilEnd)}天)` 
-                                  : item.daysUntilEnd === 0 
-                                    ? '(今天到期)' 
+                                {item.daysUntilEnd < 0
+                                  ? `(已过期 ${Math.abs(item.daysUntilEnd)} 天)`
+                                  : item.daysUntilEnd === 0
+                                    ? '(今天到期)'
                                     : `(还剩${item.daysUntilEnd}天)`}
                               </div>
                             </TableCell>
@@ -391,12 +459,12 @@ const RemindersTab: React.FC = () => {
                         <div className="flex-1 min-w-0">
                           <div className="font-medium text-sm line-clamp-2">{item.projectName}</div>
                           <div className="text-xs text-muted-foreground mt-1">
-                            {item.shortName} · {item.bd}
+                            {item.shortName} - <UserProfileName name={item.bd || '-'} openId={item.bdOpenId} />
                           </div>
                         </div>
                         {getReminderBadge(item.reminderLevel)}
                       </div>
-                      
+
                       <div className="flex flex-wrap gap-2 mt-2">
                         <Badge variant="outline" className={cn('text-xs', getProjectTypeBadgeClass(item.projectType))}>
                           {item.projectType}
@@ -410,13 +478,13 @@ const RemindersTab: React.FC = () => {
                         <Calendar className="h-3 w-3 text-muted-foreground" />
                         <span>结束时间: {formatDateSafe(item.projectEndDate) || '-'}</span>
                         <span className={cn(
-                          item.daysUntilEnd < 0 ? 'text-destructive' : 
+                          item.daysUntilEnd < 0 ? 'text-destructive' :
                           item.daysUntilEnd === 0 ? 'text-warning' : 'text-muted-foreground'
                         )}>
-                          {item.daysUntilEnd < 0 
-                            ? `(已过期${Math.abs(item.daysUntilEnd)}天)` 
-                            : item.daysUntilEnd === 0 
-                              ? '(今天到期)' 
+                          {item.daysUntilEnd < 0
+                            ? `(已过期 ${Math.abs(item.daysUntilEnd)} 天)`
+                            : item.daysUntilEnd === 0
+                              ? '(今天到期)'
                               : `(还剩${item.daysUntilEnd}天)`}
                         </span>
                       </div>

@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { projectDB } from '@/data/projects';
 import { signoffDB } from '@/data/signoff';
@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import {
   Table,
   TableBody,
@@ -16,6 +17,63 @@ import {
 } from '@/components/ui/table';
 import { Plus, Search, Edit, FileCheck, FolderKanban } from 'lucide-react';
 import { LEGACY_PROJECT_LIST_COLUMNS } from '@/types/bd';
+import { cn } from '@/lib/utils';
+import { initUserProfileFromWindow, renderUserProfile } from '@/lib/feishuUserProfile';
+
+type UserProfileNameProps = {
+  name: string;
+  openId?: string;
+  className?: string;
+};
+
+const UserProfileName: React.FC<UserProfileNameProps> = ({ name, openId, className }) => {
+  const [open, setOpen] = useState(false);
+  const mountRef = useRef<HTMLDivElement | null>(null);
+  const instanceRef = useRef<{ unmount?: () => void } | null>(null);
+
+  useEffect(() => {
+    if (!open || !openId || !mountRef.current) return;
+    const ready = initUserProfileFromWindow();
+    if (!ready) return;
+    instanceRef.current = renderUserProfile(openId, mountRef.current);
+    return () => {
+      instanceRef.current?.unmount?.();
+      instanceRef.current = null;
+    };
+  }, [open, openId]);
+
+  const handleOpenChange = (nextOpen: boolean) => {
+    if (!nextOpen) {
+      instanceRef.current?.unmount?.();
+      instanceRef.current = null;
+    } else if (!initUserProfileFromWindow()) {
+      return;
+    }
+    setOpen(nextOpen);
+  };
+
+  if (!openId) {
+    return <span className={className}>{name || '-'}</span>;
+  }
+
+  return (
+    <Popover open={open} onOpenChange={handleOpenChange}>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          className={cn('text-primary underline underline-offset-2', className)}
+          onClick={(e) => e.stopPropagation()}
+          onPointerDown={(e) => e.stopPropagation()}
+        >
+          {name || '-'}
+        </button>
+      </PopoverTrigger>
+      <PopoverContent align="start" className="w-[360px] p-2">
+        <div ref={mountRef} />
+      </PopoverContent>
+    </Popover>
+  );
+};
 
 const ProjectList: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
@@ -135,7 +193,9 @@ const ProjectList: React.FC = () => {
                           </Badge>
                         </TableCell>
                         <TableCell>{formatAmount(project.estimatedAmount)}</TableCell>
-                        <TableCell>{project.bd}</TableCell>
+                        <TableCell>
+                          <UserProfileName name={project.bd || '-'} openId={project.bdOpenId} />
+                        </TableCell>
                         <TableCell className="text-right">
                           <div className="flex items-center justify-end gap-1">
                             <Button
