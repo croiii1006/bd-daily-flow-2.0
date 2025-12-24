@@ -88,6 +88,26 @@ export async function listFields({ appToken, tableId }) {
 }
 
 // ========================
+// 4) Message
+// ========================
+export async function sendMessageToUser(openId, text) {
+  const receiveId = String(openId || "").trim();
+  if (!receiveId) throw new Error("sendMessageToUser: openId is required");
+  const url = "https://open.feishu.cn/open-apis/im/v1/messages?receive_id_type=open_id";
+  const body = {
+    receive_id: receiveId,
+    msg_type: "text",
+    content: JSON.stringify({ text: String(text || "") }),
+  };
+  const json = await feishuFetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json; charset=utf-8" },
+    body: JSON.stringify(body),
+  });
+  return json?.data || null;
+}
+
+// ========================
 // 3) Read records
 // ========================
 export async function listRecords({

@@ -8,7 +8,7 @@ import crypto from "crypto";
 import express from "express";
 import cors from "cors";
 
-import { createRecord, listFields, listRecords, updateRecord } from "./feishu.js";
+import { createRecord, listFields, listRecords, updateRecord, sendMessageToUser } from "./feishu.js";
 
 import {
 
@@ -45,6 +45,12 @@ const DEAL_TABLE_ID = process.env.FEISHU_BITABLE_DEAL_TABLE_ID;
 const KANBAN_APP_TOKEN = process.env.FEISHU_KANBAN_APP_TOKEN || process.env.FEISHU_BITABLE_APP_TOKEN;
 const KANBAN_BOARD_ID = process.env.FEISHU_KANBAN_BOARD_ID;
 const DASHBOARD_EMBED_URL = process.env.FEISHU_DASHBOARD_EMBED_URL;
+const DAILY_FORM_URL = process.env.DAILY_FORM_URL || "";
+const DAILY_FORM_BD_OPEN_IDS = String(process.env.DAILY_FORM_BD_OPEN_IDS || "")
+  .split(",")
+  .map((s) => s.trim())
+  .filter(Boolean);
+const CRON_SECRET = String(process.env.CRON_SECRET || "").trim();
 
 let cachedJsapiTicket = null;
 let jsapiTicketExpireAt = 0;
@@ -140,6 +146,50 @@ app.get("/api/debug-env", (req, res) => {
 
   });
 
+});
+
+// ====== 定时提醒：每日表单 ======
+app.get("/api/notify/daily", async (req, res) => {
+  try {
+    if (CRON_SECRET) {
+      const header = String(req.headers.authorization || "");
+      const token = header.toLowerCase().startsWith("bearer ")
+        ? header.slice(7).trim()
+        : "";
+      if (!token || token !== CRON_SECRET) {
+        return res.status(401).json({ success: false, error: "unauthorized" });
+      }
+    }
+
+    const url = String(req.query.url || DAILY_FORM_URL || "").trim();
+    if (!url) {
+      return res.status(400).json({ success: false, error: "missing DAILY_FORM_URL" });
+    }
+
+    const openIds = DAILY_FORM_BD_OPEN_IDS.length
+      ? DAILY_FORM_BD_OPEN_IDS
+      : [
+          "ou_a58586d5eae4171246d9514720e46db7",
+          "ou_b89e947decf816f6f337f873358a52ec",
+          "ou_f5dac90ed9608641db9db9fa39e2a0ec",
+        ];
+
+    const text = `每日表单填写链接：${url}`;
+    const results = [];
+    for (const openId of openIds) {
+      try {
+        const data = await sendMessageToUser(openId, text);
+        results.push({ openId, success: true, data });
+      } catch (e) {
+        results.push({ openId, success: false, error: String(e) });
+      }
+    }
+
+    res.json({ success: true, count: results.length, results });
+  } catch (e) {
+    console.error("GET /api/notify/daily failed:", e);
+    res.status(500).json({ success: false, error: String(e) });
+  }
 });
 // ====== UserProfile Config ======
 app.get("/api/feishu/user-profile-config", async (req, res) => {
@@ -2799,9 +2849,11 @@ app.get("/api/dashboard/embed", (req, res) => {
 
 
 
-app.listen(PORT, () => {
+if (process.env.VERCEL !== "1") {
+  app.listen(PORT, () => {
+    console.log(`?API server running at http://localhost:${PORT}`);
+  });
+}
 
-  console.log(`?API server running at http://localhost:${PORT}`);
-
-});
+export default app;
 
