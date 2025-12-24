@@ -17,15 +17,6 @@ import {
 
 } from "./feishu.js";
 
-if (process.env.VERCEL !== "1") {
-  try {
-    const dotenv = await import("dotenv");
-    dotenv.default?.config?.();
-  } catch (e) {
-    console.warn("dotenv not loaded", String(e?.message || e));
-  }
-}
-
 
 
 const app = express();
