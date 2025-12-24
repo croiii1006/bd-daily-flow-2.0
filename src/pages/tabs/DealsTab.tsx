@@ -1,7 +1,6 @@
 ﻿import React, { useState, useEffect } from 'react';
 import { dataService } from '@/services/dataService';
 import type { Deal, Project } from '@/types/bd';
-import { MONTH_OPTIONS } from '@/types/bd';
 import { Card, CardContent } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -14,6 +13,8 @@ const DealsTab: React.FC = () => {
   const [projects, setProjects] = useState<Project[]>([]);
   const [filteredDeals, setFilteredDeals] = useState<Deal[]>([]);
   const [monthFilter, setMonthFilter] = useState<string>('all');
+  const [signCompanyFilter, setSignCompanyFilter] = useState<string>('all');
+  const [finishFilter, setFinishFilter] = useState<string>('all');
   const [selectedDeal, setSelectedDeal] = useState<Deal | null>(null);
   const [showDetail, setShowDetail] = useState(false);
 
@@ -23,7 +24,7 @@ const DealsTab: React.FC = () => {
 
   useEffect(() => {
     filterDeals();
-  }, [deals, monthFilter]);
+  }, [deals, monthFilter, signCompanyFilter, finishFilter]);
 
   const loadData = async () => {
     const [dealsData, projectsData] = await Promise.all([
@@ -38,7 +39,38 @@ const DealsTab: React.FC = () => {
     let result = [...deals];
 
     if (monthFilter !== 'all') {
-      result = result.filter(d => d.month === monthFilter);
+      const extractMonth = (raw: any) => {
+        if (raw === null || raw === undefined) return '';
+        const str = String(raw).trim();
+        if (!str) return '';
+        const match = str.match(/(\d{1,2})\s*$/);
+        if (match) return String(Number(match[1]));
+        const parts = str.replace(/\//g, '.').replace(/-/g, '.').split('.');
+        const last = parts[parts.length - 1];
+        if (!last) return '';
+        const n = Number(last);
+        return Number.isFinite(n) ? String(n) : '';
+      };
+      const targetMonth = Number(monthFilter);
+      result = result.filter((d) => Number(extractMonth(d.month || d.startDate)) === targetMonth);
+    }
+
+    if (signCompanyFilter !== 'all') {
+      result = result.filter(d => String(d.signCompany || '').trim() === signCompanyFilter);
+    }
+
+    if (finishFilter !== 'all') {
+      const match = finishFilter === 'yes';
+      result = result.filter((d) => {
+        const raw = d.isFinished;
+        const normalized =
+          raw === true || raw === 'true' || raw === '是' || raw === '已完结'
+            ? true
+            : raw === false || raw === 'false' || raw === '否' || raw === '进行中'
+              ? false
+              : undefined;
+        return normalized === match;
+      });
     }
 
     setFilteredDeals(result);
@@ -77,6 +109,10 @@ const DealsTab: React.FC = () => {
   const totalIncome = filteredDeals.reduce((sum, d) => sum + (d.incomeWithTax || 0), 0);
   const totalReceived = filteredDeals.reduce((sum, d) => sum + (d.receivedAmount || 0), 0);
   const totalRemaining = filteredDeals.reduce((sum, d) => sum + (d.remainingReceivable || 0), 0);
+  const monthOptions = Array.from({ length: 12 }, (_, i) => String(i + 1));
+  const signCompanyOptions = Array.from(
+    new Set(deals.map((d) => String(d.signCompany || '').trim()).filter((v) => v))
+  );
 
   return (
     <div className="space-y-4">
@@ -90,9 +126,30 @@ const DealsTab: React.FC = () => {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">全部月份</SelectItem>
-                {MONTH_OPTIONS.map(month => (
+                {monthOptions.map(month => (
                   <SelectItem key={month} value={month}>{month}</SelectItem>
                 ))}
+              </SelectContent>
+            </Select>
+            <Select value={signCompanyFilter} onValueChange={setSignCompanyFilter}>
+              <SelectTrigger className="w-[180px]">
+                <SelectValue placeholder="签约公司主体" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">全部主体</SelectItem>
+                {signCompanyOptions.map((name) => (
+                  <SelectItem key={name} value={name}>{name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select value={finishFilter} onValueChange={setFinishFilter}>
+              <SelectTrigger className="w-[140px]">
+                <SelectValue placeholder="是否完结" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">全部状态</SelectItem>
+                <SelectItem value="yes">已完结</SelectItem>
+                <SelectItem value="no">进行中</SelectItem>
               </SelectContent>
             </Select>
           </div>
