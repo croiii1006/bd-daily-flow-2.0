@@ -1,4 +1,4 @@
-﻿import dotenv from "dotenv";
+﻿﻿﻿﻿﻿import dotenv from "dotenv";
 
 dotenv.config();
 
@@ -297,9 +297,155 @@ function findFieldId(fieldMap, expectedName) {
 
 
 
+
+function normalizePersonName(name) {
+  return String(name || "")
+    .trim()
+    .replace(/\s+/g, "");
+}
+
+function pickPersonId(personObj) {
+  if (!personObj || typeof personObj !== "object") return "";
+  return (
+    personObj.id ||
+    personObj.user_id ||
+    personObj.open_id ||
+    personObj.openId ||
+    personObj.userId ||
+    personObj?.value?.id ||
+    personObj?.value?.user_id ||
+    ""
+  );
+}
+
+function getPersonIdMapFromEnv() {
+  const raw = String(process.env.FEISHU_PERSON_ID_MAP || "").trim();
+  const map = new Map();
+  if (!raw) return map;
+
+  try {
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed)) {
+      parsed.forEach((item) => {
+        const name = normalizePersonName(item?.name);
+        const id = String(item?.id || "").trim();
+        if (name && id) map.set(name, id);
+      });
+      return map;
+    }
+    if (parsed && typeof parsed === "object") {
+      Object.entries(parsed).forEach(([name, id]) => {
+        const key = normalizePersonName(name);
+        const val = String(id || "").trim();
+        if (key && val) map.set(key, val);
+      });
+      return map;
+    }
+  } catch {
+    // fall through to csv parser
+  }
+
+  raw
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .forEach((pair) => {
+      const [name, id] = pair.split(":").map((s) => s.trim());
+      const key = normalizePersonName(name);
+      const val = String(id || "").trim();
+      if (key && val) map.set(key, val);
+    });
+  return map;
+}
+
+function readPersonIdMapFromEnv() {
+  const map = getPersonIdMapFromEnv();
+  return Array.from(map.entries()).map(([name, id]) => ({ name, id }));
+}
+
+async function resolvePersonFieldValue({ appToken, tableId, fieldName, input }) {
+  if (input === undefined || input === null) return null;
+
+  if (Array.isArray(input)) {
+    const normalized = input.map((item) => {
+      if (item && typeof item === "object") return { id: pickPersonId(item) || item.id };
+      return null;
+    });
+    const valid = normalized.filter((item) => item?.id);
+    if (valid.length) return valid;
+  }
+
+  if (typeof input === "object" && input !== null) {
+    const id = pickPersonId(input);
+    if (id) return [{ id }];
+  }
+
+  const target = normalizePersonName(input);
+  if (!target) return null;
+
+  const envMap = getPersonIdMapFromEnv();
+  if (envMap.has(target)) return [{ id: envMap.get(target) }];
+
+  const items = await listRecords({ appToken, tableId, pageSize: 200 });
+  for (const it of items || []) {
+    const v = it?.fields?.[fieldName];
+    if (!Array.isArray(v)) continue;
+    for (const personObj of v) {
+      const name = normalizePersonName(personObj?.name);
+      const id = pickPersonId(personObj);
+      if (name && id && name === target) return [{ id }];
+    }
+  }
+
+  return null;
+}
+
+async function getKnownPersonNames({ appToken, tableId, fieldName }) {
+  const items = await listRecords({ appToken, tableId, pageSize: 200 });
+  const names = new Set();
+  for (const it of items || []) {
+    const v = it?.fields?.[fieldName];
+    if (!Array.isArray(v)) continue;
+    for (const personObj of v) {
+      const name = normalizePersonName(personObj?.name);
+      if (name) names.add(name);
+    }
+  }
+  return Array.from(names).sort((a, b) => a.localeCompare(b, "zh-CN"));
+}
+
+async function resolveCustomerBdField(ownerBd) {
+  const target = normalizePersonName(ownerBd);
+  if (!target) return { value: null, known: [] };
+
+  const envMap = getPersonIdMapFromEnv();
+  if (envMap.has(target)) {
+    return { value: [{ id: envMap.get(target) }], known: Array.from(envMap.keys()) };
+  }
+
+  if (!PROJECT_APP_TOKEN || !PROJECT_TABLE_ID) {
+    return { value: null, known: [] };
+  }
+
+  const value = await resolvePersonFieldValue({
+    appToken: PROJECT_APP_TOKEN,
+    tableId: PROJECT_TABLE_ID,
+    fieldName: PROJECT_FIELD.bd,
+    input: ownerBd,
+  });
+
+  const known = await getKnownPersonNames({
+    appToken: PROJECT_APP_TOKEN,
+    tableId: PROJECT_TABLE_ID,
+    fieldName: PROJECT_FIELD.bd,
+  });
+
+  return { value, known };
+}
 app.post("/api/customers", async (req, res) => {
 
   try {
+    console.log("🟦 POST /api/customers body:", req.body);
 
     const appToken = process.env.FEISHU_BITABLE_APP_TOKEN;
 
@@ -333,89 +479,49 @@ app.post("/api/customers", async (req, res) => {
 
     if (!shortName) {
 
-      return res.status(400).json({ success: false, error: "缺少 shortName ?name" });
+      return res.status(400).json({ success: false, error: "缺少 shortName / name" });
 
     }
 
-
-
-    // ?只写你飞书表里真实存在的字段名（UTF-8?
+    // 只写你飞书表里真实存在的字段名（UTF-8）
     const fields = {
-
-      "??/????": shortName,
-
+      "客户/部门简称": shortName,
       "年框客户": Boolean(body.isAnnual),
-
     };
-
-
 
     if (companyName) fields["企业名称"] = companyName;
 
-
-
     const hq = String(body.hq || "").trim();
-
     if (hq) fields["公司总部地区"] = hq;
 
-
-
     const customerType = String(body.customerType || "").trim();
-
     if (customerType) fields["客户类型"] = customerType;
 
-
-
     const level = String(body.level || "").trim();
-
     if (level) fields["客户等级"] = level;
 
-
-
     const cooperationStatus = String(body.cooperationStatus || "").trim();
-
-    if (cooperationStatus) fields["????"] = cooperationStatus;
-
-
+    if (cooperationStatus) fields["合作状态"] = cooperationStatus;
 
     const industry = String(body.industry || "").trim();
-
     if (industry) fields["行业大类"] = industry;
 
-
-
-    // ?人员字段（主BD负责人，type=11）：支持?user_id 或姓名（姓名将自动解析为 user_id?
+    // 人员字段（主BD负责人，type=11）：支持 user_id 或姓名（姓名将自动解析为 user_id）
     const ownerUserId = String(body.ownerUserId || "").trim();
-
     const ownerBd = String(body.ownerBd || "").trim();
-
     if (ownerUserId) {
-
-      fields["?BD???"] = [{ id: ownerUserId }];
-
+      fields["主BD负责人"] = [{ id: ownerUserId }];
     } else if (ownerBd) {
-
       const { value: resolved, known } = await resolveCustomerBdField(ownerBd);
-
       if (!resolved) {
-
         return res.status(400).json({
-
           success: false,
-
-          error: `无法解析人员字段 BD='${ownerBd}'（请确保该人员在飞书?项目表里出现过一次，或配?FEISHU_PERSON_ID_MAP）`,
-
+          error: `无法解析人员字段 BD='${ownerBd}'（请确保该人员在飞书项目表里出现过一次，或配置 FEISHU_PERSON_ID_MAP）`,
           known_names: known,
-
         });
-
       }
-
-      fields["?BD???"] = resolved;
-
+      fields["主BD负责人"] = resolved;
     }
-
-
 
     console.log("🟦 POST /api/customers fields:", fields);
 
@@ -480,6 +586,7 @@ app.post("/api/customers", async (req, res) => {
 app.put("/api/customers/:customerId", async (req, res) => {
 
   try {
+    console.log("🟧 PUT /api/customers body:", req.body, "customerId=", req.params.customerId);
 
     const appToken = process.env.FEISHU_BITABLE_APP_TOKEN;
 
@@ -579,7 +686,7 @@ app.put("/api/customers/:customerId", async (req, res) => {
 
 
 
-    setIf("??/????", String(body.shortName || "").trim());
+    setIf("客户/部门简称", String(body.shortName || "").trim());
 
     setIf("企业名称", String(body.companyName || "").trim());
 
@@ -589,22 +696,20 @@ app.put("/api/customers/:customerId", async (req, res) => {
 
     setIf("客户等级", body.level);
 
-    setIf("????", body.cooperationStatus);
+    setIf("合作状态", body.cooperationStatus);
 
     setIf("行业大类", body.industry);
 
     if (body.isAnnual !== undefined) setIf("年框客户", Boolean(body.isAnnual));
 
-
-
-    // ?人员字段（主BD负责人，type=11）：支持?user_id 或姓名（姓名将自动解析为 user_id?
+    // 人员字段（主BD负责人，type=11）：支持 user_id 或姓名（姓名将自动解析为 user_id）
     const ownerUserId = String(body.ownerUserId || "").trim();
 
     const ownerBd = String(body.ownerBd || "").trim();
 
     if (ownerUserId) {
 
-      fields["?BD???"] = [{ id: ownerUserId }];
+      fields["主BD负责人"] = [{ id: ownerUserId }];
 
     } else if (ownerBd) {
 
@@ -616,7 +721,7 @@ app.put("/api/customers/:customerId", async (req, res) => {
 
           success: false,
 
-          error: `无法解析人员字段 BD='${ownerBd}'（请确保该人员在飞书?项目表里出现过一次，或配?FEISHU_PERSON_ID_MAP）`,
+          error: `无法解析人员字段 BD='${ownerBd}'（请确保该人员在飞书项目表里出现过一次，或配置 FEISHU_PERSON_ID_MAP）`,
 
           known_names: known,
 
@@ -624,11 +729,9 @@ app.put("/api/customers/:customerId", async (req, res) => {
 
       }
 
-      fields["?BD???"] = resolved;
+      fields["主BD负责人"] = resolved;
 
     }
-
-
 
     console.log("🟦 PUT /api/customers fields:", fields, "recordId=", recordId);
 
@@ -858,13 +961,14 @@ const PROJECT_FIELD = {
 
   am: "AM",
 
-  totalBdHours: "???????hr?",
+  totalBdHours: "累计商务时间（hr）",
 
-  lastUpdateDate: "最近更新日期",
+  lastUpdateDate: "最新更新日期",
 
   nextFollowDate: "下次跟进日期",
 
 };
+
 
 
 
@@ -1550,6 +1654,10 @@ app.put("/api/projects/:projectId", async (req, res) => {
 
     setField("deliverableName", body.deliverableName);
 
+    setField("totalBdHours", body.totalBdHours);
+
+    setField("lastUpdateDate", body.lastUpdateDate);
+
     if (body.expectedAmount !== undefined && body.expectedAmount !== null && body.expectedAmount !== "") {
 
       const num = Number(body.expectedAmount);
@@ -1831,6 +1939,20 @@ function mapDealRecord(it = {}) {
   return result;
 }
 
+
+async function findDealRecordIdByDealId(dealId) {
+  const records = await listRecords({
+    appToken: DEAL_APP_TOKEN,
+    tableId: DEAL_TABLE_ID,
+    pageSize: 200,
+  });
+  const hit = (records || []).find((it) => {
+    const f = it.fields || {};
+    const val = f[DEAL_FIELD.dealId] || f.dealId || f.id || it.record_id || "";
+    return String(val).trim() == String(dealId).trim();
+  });
+  return hit?.record_id || null;
+}
 app.get("/api/deals", async (req, res) => {
 
   try {
@@ -2437,13 +2559,11 @@ app.get("/api/project-persons", async (req, res) => {
 
     });
 
-
-
-    const collect = (fieldName) => {
+    const collect = (records, fieldName) => {
 
       const map = new Map();
 
-      for (const it of items || []) {
+      for (const it of records || []) {
 
         const v = it?.fields?.[fieldName];
 
@@ -2469,6 +2589,16 @@ app.get("/api/project-persons", async (req, res) => {
 
     };
 
+    let customerBd = [];
+    if (process.env.FEISHU_BITABLE_APP_TOKEN && process.env.FEISHU_BITABLE_TABLE_ID) {
+      const customerItems = await listRecords({
+        appToken: process.env.FEISHU_BITABLE_APP_TOKEN,
+        tableId: process.env.FEISHU_BITABLE_TABLE_ID,
+        pageSize: 200,
+      });
+      customerBd = collect(customerItems, "主BD负责人");
+    }
+
 
 
     return res.json({
@@ -2477,9 +2607,11 @@ app.get("/api/project-persons", async (req, res) => {
 
       data: {
 
-        bd: collect(PROJECT_FIELD.bd),
+        bd: collect(items, PROJECT_FIELD.bd),
 
-        am: collect(PROJECT_FIELD.am),
+        am: collect(items, PROJECT_FIELD.am),
+
+        customer_bd: customerBd,
 
         env_map: readPersonIdMapFromEnv(),
 
@@ -2672,3 +2804,4 @@ app.listen(PORT, () => {
   console.log(`?API server running at http://localhost:${PORT}`);
 
 });
+

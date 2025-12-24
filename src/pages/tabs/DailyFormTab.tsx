@@ -320,6 +320,7 @@ export default function DailyFormTab() {
     bd: string[];
     am: string[];
   }>({ bd: [], am: [] });
+  const [projectPersonIdMap, setProjectPersonIdMap] = useState<Record<string, string>>({});
 
   const [hasNewClient, setHasNewClient] = useState("no");
   const [newClientDrafts, setNewClientDrafts] = useState<NewClientDraft[]>([]);
@@ -372,14 +373,35 @@ export default function DailyFormTab() {
       const json = await res.json().catch(() => null);
       if (!res.ok || !json?.success) return;
 
+      const idMap: Record<string, string> = {};
       const bd = (json?.data?.bd || [])
-        .map((x: any) => String(x?.name || "").trim())
+        .map((x: any) => {
+          const name = String(x?.name || "").trim();
+          const id = String(x?.id || "").trim();
+          if (name && id) idMap[name] = id;
+          return name;
+        })
+        .filter(Boolean);
+      const customerBd = (json?.data?.customer_bd || [])
+        .map((x: any) => {
+          const name = String(x?.name || "").trim();
+          const id = String(x?.id || "").trim();
+          if (name && id) idMap[name] = id;
+          return name;
+        })
         .filter(Boolean);
       const am = (json?.data?.am || [])
-        .map((x: any) => String(x?.name || "").trim())
+        .map((x: any) => {
+          const name = String(x?.name || "").trim();
+          const id = String(x?.id || "").trim();
+          if (name && id) idMap[name] = id;
+          return name;
+        })
         .filter(Boolean);
 
-      setProjectPersonOptions({ bd, am });
+      const bdOptions = Array.from(new Set([...bd, ...customerBd]));
+      setProjectPersonOptions({ bd: bdOptions, am });
+      setProjectPersonIdMap(idMap);
     } catch (e) {
       console.warn("[DailyFormTab] loadProjectPersons failed:", e);
     }
@@ -517,8 +539,10 @@ export default function DailyFormTab() {
       for (const entry of timeEntries) {
         const project = projects.find((p: any) => p.projectId === entry.projectId) as any;
         if (!project) continue;
+        // 必须先拿到项目已有累计值，再加上本次填写的小时数，避免字符串拼接
+        const existingHours = numOrUndef(project.totalBdHours) ?? 0;
         await dataService.updateProject(entry.projectId, {
-          totalBdHours: (project.totalBdHours || 0) + entry.hours,
+          totalBdHours: existingHours + entry.hours,
           lastUpdateDate: today,
           nextFollowDate,
         } as any);
@@ -617,7 +641,11 @@ export default function DailyFormTab() {
         try {
           for (const c of candidates) {
             const { customerId, ...patch } = c;
-            await dataService.updateClient(customerId, { ...patch, cooperationStatus: c.cooperationStatus } as any);
+            const ownerUserId = projectPersonIdMap[String(c.ownerBd || "").trim()];
+            const payload = ownerUserId
+              ? { ...patch, cooperationStatus: c.cooperationStatus, ownerUserId }
+              : { ...patch, cooperationStatus: c.cooperationStatus };
+            await dataService.updateClient(customerId, payload as any);
           }
           toast.success(`客户更新成功（已写回飞书）：${candidates.length} 个`);
           setUpdateClientDrafts([]);
@@ -644,6 +672,10 @@ export default function DailyFormTab() {
         }
         try {
           for (const p of candidates) {
+            const bdId = projectPersonIdMap[String(p.bd || "").trim()];
+            const amId = projectPersonIdMap[String(p.am || "").trim()];
+            const bdValue = bdId ? ({ id: bdId } as any) : p.bd;
+            const amValue = amId ? ({ id: amId } as any) : (p.am || undefined);
             await dataService.createProject({
               customerId: p.customerId,
               shortName: p.shortName,
@@ -656,8 +688,8 @@ export default function DailyFormTab() {
               stage: p.stage as any,
               priority: p.priority as any,
               expectedAmount: numOrUndef(p.expectedAmount),
-              bd: p.bd,
-              am: p.am || undefined,
+              bd: bdValue,
+              am: amValue,
               totalBdHours: numOrUndef(p.totalBdHours) ?? 0,
               lastUpdateDate: p.lastUpdateDate,
               nextFollowDate: p.nextFollowDate,
@@ -692,6 +724,10 @@ export default function DailyFormTab() {
         });
         try {
           for (const p of candidates) {
+            const bdId = projectPersonIdMap[String(p.bd || "").trim()];
+            const amId = projectPersonIdMap[String(p.am || "").trim()];
+            const bdValue = bdId ? ({ id: bdId } as any) : p.bd;
+            const amValue = amId ? ({ id: amId } as any) : (p.am || undefined);
             await dataService.updateProject(p.projectId, {
               projectName: projectNameFromDraft(p),
               customerId: p.customerId,
@@ -704,8 +740,8 @@ export default function DailyFormTab() {
               stage: p.stage as any,
               priority: p.priority as any,
               expectedAmount: numOrUndef(p.expectedAmount),
-              bd: p.bd,
-              am: p.am || undefined,
+              bd: bdValue,
+              am: amValue,
               totalBdHours: numOrUndef(p.totalBdHours) ?? 0,
               lastUpdateDate: p.lastUpdateDate,
               nextFollowDate: p.nextFollowDate,

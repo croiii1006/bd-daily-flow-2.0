@@ -53,6 +53,12 @@ const getDaysDiff = (from: string | Date | undefined | null, to: string | Date |
   return Math.floor(ms / (1000 * 60 * 60 * 24));
 };
 
+const resolveCustomerBdField = (data: Partial<Client> & { owner?: string; ownerBd?: string; ownerUserId?: string }) => {
+  const ownerBd = String(data.ownerBd ?? data.owner ?? '').trim();
+  const ownerUserId = String(data.ownerUserId ?? '').trim();
+  return { ownerBd, ownerUserId };
+};
+
 export const dataService = {
   // ==================== 客户操作 ====================
 
@@ -99,6 +105,7 @@ export const dataService = {
   ): Promise<Client> {
     // ✅ 必须走后端写回飞书，否则 Network 里不会出现 POST /api/customers
     try {
+      const { ownerBd, ownerUserId } = resolveCustomerBdField(data as any);
       const payload = {
         shortName: data.shortName,
         companyName: data.companyName,
@@ -109,8 +116,8 @@ export const dataService = {
         industry: (data.industry || '').trim(),
         isAnnual: !!data.isAnnual,
         // 后端客户接口读取 ownerBd / ownerUserId
-        ownerBd: (data as any).ownerBd || (data as any).owner || '',
-        ownerUserId: (data as any).ownerUserId || '',
+        ownerBd,
+        ownerUserId,
       };
 
       const { res, json } = await fetchJson('/api/customers', {
@@ -134,8 +141,8 @@ export const dataService = {
         industry: data.industry || '',
         hq: data.hq || '',
         isAnnual: !!data.isAnnual,
-        owner: (data as any).owner || (data as any).ownerBd || '',
-        ownerUserId: (data as any).ownerUserId || '',
+        owner: ownerBd,
+        ownerUserId,
         relatedProjectIds: [],
         customerId: recordId || Date.now().toString(),
       };
