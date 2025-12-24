@@ -3,11 +3,11 @@ import { dataService } from '@/services/dataService';
 import type { Project, ProjectStage, ProjectPriority } from '@/types/bd';
 import {
   BD_OPTIONS,
-  MONTH_OPTIONS,
   PROJECT_STAGE_BADGE_CLASS,
   PROJECT_STAGE_OPTIONS,
   PROJECT_TYPE_OPTIONS,
   PROJECT_PRIORITY_OPTIONS,
+  SERVICE_TYPE_OPTIONS,
 } from '@/config/bdOptions';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -83,9 +83,11 @@ const ProjectsTab: React.FC = () => {
   const [searchKeyword, setSearchKeyword] = useState('');
   const [stageFilter, setStageFilter] = useState<string>('all');
   const [typeFilter, setTypeFilter] = useState<string>('all');
+  const [serviceTypeFilter, setServiceTypeFilter] = useState<string>('all');
   const [priorityFilter, setPriorityFilter] = useState<string>('all');
   const [bdFilter, setBdFilter] = useState<string>('all');
   const [monthFilter, setMonthFilter] = useState<string>('all');
+  const [hoursSort, setHoursSort] = useState<string>('none');
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
   const [showDetail, setShowDetail] = useState(false);
 
@@ -95,7 +97,7 @@ const ProjectsTab: React.FC = () => {
 
   useEffect(() => {
     filterProjects();
-  }, [projects, searchKeyword, stageFilter, typeFilter, priorityFilter, bdFilter, monthFilter]);
+  }, [projects, searchKeyword, stageFilter, typeFilter, serviceTypeFilter, priorityFilter, bdFilter, monthFilter, hoursSort]);
 
   const loadProjects = async () => {
     const data = await dataService.getAllProjects();
@@ -121,6 +123,10 @@ const ProjectsTab: React.FC = () => {
       result = result.filter((p) => p.projectType === typeFilter);
     }
 
+    if (serviceTypeFilter !== 'all') {
+      result = result.filter((p) => p.serviceType === serviceTypeFilter);
+    }
+
     if (priorityFilter !== 'all') {
       result = result.filter((p) => p.priority === priorityFilter);
     }
@@ -130,7 +136,30 @@ const ProjectsTab: React.FC = () => {
     }
 
     if (monthFilter !== 'all') {
-      result = result.filter((p) => p.month === monthFilter);
+      const extractMonth = (raw: any) => {
+        if (raw === null || raw === undefined) return '';
+        const str = String(raw).trim();
+        if (!str) return '';
+        const match = str.match(/(\d{1,2})\s*$/);
+        if (match) return String(Number(match[1]));
+        const parts = str.replace(/\//g, '.').replace(/-/g, '.').split('.');
+        const last = parts[parts.length - 1];
+        if (!last) return '';
+        const n = Number(last);
+        return Number.isFinite(n) ? String(n) : '';
+      };
+      result = result.filter((p) => Number(extractMonth(p.month)) === Number(monthFilter));
+    }
+
+    if (hoursSort !== 'none') {
+      const getHours = (v: any) => {
+        const n = Number(v);
+        return Number.isFinite(n) ? n : 0;
+      };
+      result = result.sort((a, b) => {
+        const diff = getHours(a.totalBdHours) - getHours(b.totalBdHours);
+        return hoursSort === 'asc' ? diff : -diff;
+      });
     }
 
     setFilteredProjects(result);
@@ -158,9 +187,11 @@ const ProjectsTab: React.FC = () => {
 
   return (
     <div className="space-y-4">
+      {/** 月份选项改为 1-12 */}
       {/* 筛选栏 */}
       <Card>
         <CardContent className="pt-4">
+          {/** 月份使用数字 1-12 */}
           <div className="flex flex-col gap-3">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -192,6 +223,19 @@ const ProjectsTab: React.FC = () => {
                 <SelectContent>
                   <SelectItem value="all">全部类别</SelectItem>
                   {PROJECT_TYPE_OPTIONS.map((type) => (
+                    <SelectItem key={type} value={type}>
+                      {type}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Select value={serviceTypeFilter} onValueChange={setServiceTypeFilter}>
+                <SelectTrigger className="w-[120px]">
+                  <SelectValue placeholder="服务类型" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">全部服务</SelectItem>
+                  {SERVICE_TYPE_OPTIONS.map((type) => (
                     <SelectItem key={type} value={type}>
                       {type}
                     </SelectItem>
@@ -231,11 +275,19 @@ const ProjectsTab: React.FC = () => {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">全部月份</SelectItem>
-                  {MONTH_OPTIONS.map((month) => (
-                    <SelectItem key={month} value={month}>
-                      {month}
-                    </SelectItem>
+                  {Array.from({ length: 12 }, (_, i) => String(i + 1)).map((month) => (
+                    <SelectItem key={month} value={month}>{month}</SelectItem>
                   ))}
+                </SelectContent>
+              </Select>
+              <Select value={hoursSort} onValueChange={setHoursSort}>
+                <SelectTrigger className="w-[150px]">
+                  <SelectValue placeholder="累计商务时间" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">不排序</SelectItem>
+                  <SelectItem value="asc">累计商务时间升序</SelectItem>
+                  <SelectItem value="desc">累计商务时间降序</SelectItem>
                 </SelectContent>
               </Select>
               <div className="hidden md:flex items-center gap-2 ml-auto" />
@@ -271,7 +323,7 @@ const ProjectsTab: React.FC = () => {
 
               <div className="flex flex-wrap gap-2 mt-3">
                 <Badge variant="outline" className="text-xs">
-                  {project.shortName || '-'}
+                  {project.totalBdHours ?? '-'}h
                 </Badge>
                 <Badge variant="outline" className="text-xs">
                   {project.serviceType || '-'}
@@ -287,10 +339,11 @@ const ProjectsTab: React.FC = () => {
               <div className="flex items-center justify-between mt-3 text-xs text-muted-foreground">
                 <span>
                   BD: <UserProfileName name={project.bd || '-'} openId={project.bdOpenId} />
+                  <span className="ml-2">AM: {project.am || '-'}</span>
                 </span>
                 <span className="flex items-center gap-1">
                   <Calendar className="h-3 w-3" />
-                  {formatDateSafe(project.nextFollowDate) || '-'}
+                  {formatDateSafe(project.lastUpdateDate) || '-'}
                 </span>
               </div>
             </CardContent>

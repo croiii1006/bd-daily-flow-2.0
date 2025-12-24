@@ -20,6 +20,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Search, Building2, User, MapPin, Tag } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { initUserProfileFromWindow, renderUserProfile } from "@/lib/feishuUserProfile";
+import { formatDateSafe } from "@/lib/date";
 
 /**
  * ✅ 唯一入口：把后端/飞书返回的“各种字段形态”统一映射为 bd.ts 的 Client
@@ -180,12 +181,15 @@ const ClientsTab: React.FC = () => {
   const [projects, setProjects] = useState<Project[]>([]);
   const [filteredClients, setFilteredClients] = useState<Client[]>([]);
   const [searchKeyword, setSearchKeyword] = useState("");
+  const [annualFilter, setAnnualFilter] = useState<string>("all");
   const [levelFilter, setLevelFilter] = useState<string>("all");
   const [industryFilter, setIndustryFilter] = useState<string>("all");
   const [bdFilter, setBdFilter] = useState<string>("all");
 
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
   const [showDetail, setShowDetail] = useState(false);
+  const [selectedProject, setSelectedProject] = useState<Project | null>(null);
+  const [showProjectDetail, setShowProjectDetail] = useState(false);
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -226,7 +230,7 @@ const ClientsTab: React.FC = () => {
   useEffect(() => {
     filterClients();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [clients, searchKeyword, levelFilter, industryFilter, bdFilter]);
+  }, [clients, searchKeyword, annualFilter, levelFilter, industryFilter, bdFilter]);
 
   const loadClients = async () => {
     try {
@@ -264,6 +268,11 @@ const ClientsTab: React.FC = () => {
       );
     }
 
+    if (annualFilter !== "all") {
+      const shouldBeAnnual = annualFilter === "yes";
+      result = result.filter((c) => Boolean(c.isAnnual) === shouldBeAnnual);
+    }
+
     if (levelFilter !== "all") {
       result = result.filter((c) => c.level === levelFilter);
     }
@@ -282,6 +291,11 @@ const ClientsTab: React.FC = () => {
   const handleClientClick = (client: Client) => {
     setSelectedClient(client);
     setShowDetail(true);
+  };
+
+  const handleProjectClick = (project: Project) => {
+    setSelectedProject(project);
+    setShowProjectDetail(true);
   };
 
   const getLevelBadgeVariant = (level?: string) => {
@@ -332,6 +346,16 @@ const ClientsTab: React.FC = () => {
             </div>
 
             <div className="flex flex-wrap gap-2">
+              <Select value={annualFilter} onValueChange={setAnnualFilter}>
+                <SelectTrigger className="w-[100px]">
+                  <SelectValue placeholder="是否年框" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">是否年框</SelectItem>
+                  <SelectItem value="yes">年框</SelectItem>
+                  <SelectItem value="no">非年框</SelectItem>
+                </SelectContent>
+              </Select>
               <Select value={levelFilter} onValueChange={setLevelFilter}>
                 <SelectTrigger className="w-[100px]">
                   <SelectValue placeholder="等级" />
@@ -348,7 +372,7 @@ const ClientsTab: React.FC = () => {
 
               <Select value={industryFilter} onValueChange={setIndustryFilter}>
                 <SelectTrigger className="w-[120px]">
-                  <SelectValue placeholder="行业" />
+                  <SelectValue placeholder="行业类别" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">全部行业</SelectItem>
@@ -439,18 +463,10 @@ const ClientsTab: React.FC = () => {
                   </span>
                 </div>
 
-                <div className="mt-2 text-xs text-muted-foreground">
-                  关联项目: {relatedProjects.length} 个
+                <div className="mt-2 flex items-center justify-between text-xs text-muted-foreground">
+                  <span>关联项目: {relatedProjects.length} 个</span>
+                  <span>{client.cooperationStatus || "-"}</span>
                 </div>
-                {relatedProjects.length > 0 && (
-                  <div className="mt-1 text-xs text-muted-foreground line-clamp-2">
-                    {relatedProjects
-                      .slice(0, 2)
-                      .map((p) => String(p.projectName || p.projectId || "-"))
-                      .join("、")}
-                    {relatedProjects.length > 2 ? ` 等 ${relatedProjects.length} 个` : ""}
-                  </div>
-                )}
               </CardContent>
             </Card>
           );
@@ -532,12 +548,19 @@ const ClientsTab: React.FC = () => {
                     {selectedRelatedProjects.length > 0 ? (
                       <div className="space-y-2">
                         {selectedRelatedProjects.map((p) => (
-                          <div
+                          <button
+                            type="button"
                             key={p.projectId || p.projectName}
-                            className="rounded-lg border p-3 text-sm font-mono"
+                            className="w-full rounded-lg border p-3 text-left text-sm hover:border-primary/60 hover:bg-muted"
+                            onClick={() => handleProjectClick(p)}
                           >
-                            {p.projectName || p.projectId || "-"}
-                          </div>
+                            <div className="font-medium">
+                              {p.projectName || p.projectId || "-"}
+                            </div>
+                            <div className="text-xs text-muted-foreground">
+                              项目ID：{p.projectId || "-"}
+                            </div>
+                          </button>
                         ))}
                       </div>
                     ) : (
@@ -547,6 +570,88 @@ const ClientsTab: React.FC = () => {
                     )}
                   </CardContent>
                 </Card>
+              </div>
+            </ScrollArea>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showProjectDetail} onOpenChange={setShowProjectDetail}>
+        <DialogContent className="max-w-2xl max-h-[90vh]">
+          <DialogHeader>
+            <DialogTitle>项目详情</DialogTitle>
+          </DialogHeader>
+          {selectedProject && (
+            <ScrollArea className="max-h-[calc(90vh-100px)]">
+              <div className="grid grid-cols-2 gap-3 text-sm">
+                <div>
+                  <span className="text-muted-foreground">项目ID：</span>
+                  <span className="font-mono">{selectedProject.projectId || "-"}</span>
+                </div>
+                <div>
+                  <span className="text-muted-foreground">客户ID：</span>
+                  <span className="font-mono">{selectedProject.customerId || "-"}</span>
+                </div>
+                <div className="col-span-2">
+                  <span className="text-muted-foreground">项目名称：</span>
+                  <span>{selectedProject.projectName || "-"}</span>
+                </div>
+                <div>
+                  <span className="text-muted-foreground">客户简称：</span>
+                  <span>{selectedProject.shortName || "-"}</span>
+                </div>
+                <div>
+                  <span className="text-muted-foreground">服务类型：</span>
+                  <span>{selectedProject.serviceType || "-"}</span>
+                </div>
+                <div>
+                  <span className="text-muted-foreground">项目类别：</span>
+                  <span>{selectedProject.projectType || "-"}</span>
+                </div>
+                <div>
+                  <span className="text-muted-foreground">项目进度：</span>
+                  <span>{selectedProject.stage || "-"}</span>
+                </div>
+                <div>
+                  <span className="text-muted-foreground">优先级：</span>
+                  <span>{selectedProject.priority || "-"}</span>
+                </div>
+                <div>
+                  <span className="text-muted-foreground">所属年月：</span>
+                  <span>{selectedProject.month || "-"}</span>
+                </div>
+                <div>
+                  <span className="text-muted-foreground">活动名称：</span>
+                  <span>{selectedProject.campaignName || "-"}</span>
+                </div>
+                <div>
+                  <span className="text-muted-foreground">交付名称：</span>
+                  <span>{selectedProject.deliverableName || "-"}</span>
+                </div>
+                <div>
+                  <span className="text-muted-foreground">BD：</span>
+                  <span>{selectedProject.bd || "-"}</span>
+                </div>
+                <div>
+                  <span className="text-muted-foreground">AM：</span>
+                  <span>{selectedProject.am || "-"}</span>
+                </div>
+                <div>
+                  <span className="text-muted-foreground">预计金额：</span>
+                  <span>{selectedProject.expectedAmount ?? "-"}</span>
+                </div>
+                <div>
+                  <span className="text-muted-foreground">累计商务时间：</span>
+                  <span>{selectedProject.totalBdHours ?? "-"}</span>
+                </div>
+                <div>
+                  <span className="text-muted-foreground">最近更新：</span>
+                  <span>{formatDateSafe(selectedProject.lastUpdateDate) || "-"}</span>
+                </div>
+                <div>
+                  <span className="text-muted-foreground">下次跟进：</span>
+                  <span>{formatDateSafe(selectedProject.nextFollowDate) || "-"}</span>
+                </div>
               </div>
             </ScrollArea>
           )}
