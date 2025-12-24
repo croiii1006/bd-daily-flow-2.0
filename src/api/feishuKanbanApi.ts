@@ -1,7 +1,6 @@
 import type { KanbanBoard, KanbanCard, KanbanColumn } from '@/types/bd';
 
-const API_BASE_URL =
-  (import.meta as any).env?.VITE_FEISHU_API_BASE_URL || 'http://localhost:4000';
+const API_BASE_URL = (import.meta as any).env?.VITE_FEISHU_API_BASE_URL || '';
 
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   const res = await fetch(`${API_BASE_URL}${path}`, {

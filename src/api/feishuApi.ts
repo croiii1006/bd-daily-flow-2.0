@@ -3,7 +3,7 @@
 /**
  * 前端调用本地 Node 服务的飞书 API 封装
  *
- * 后端地址目前是：http://localhost:4000
+ * 后端地址默认同域：/api
  * 约定接口：
  *   GET  /api/customers           获取全部客户
  *   GET  /api/customers?keyword=  按关键字搜索客户（可选，将来用）
@@ -11,9 +11,8 @@
 
 import type { Customer, Project, Signoff, DailySummary } from '@/types';
 
-// 后端基础地址：可以以后改成环境变量
-const API_BASE_URL =
-  (import.meta as any).env?.VITE_FEISHU_API_BASE_URL || 'http://localhost:4000';
+// 后端基础地址：默认同域，必要时用环境变量覆盖
+const API_BASE_URL = (import.meta as any).env?.VITE_FEISHU_API_BASE_URL || '';
 
 console.log('🔥 FEISHU API BASE URL =', API_BASE_URL);
 /**
