@@ -1,6 +1,4 @@
-﻿﻿﻿﻿﻿import dotenv from "dotenv";
-
-dotenv.config();
+﻿
 
 
 
@@ -9,7 +7,6 @@ import express from "express";
 import cors from "cors";
 
 import { createRecord, listFields, listRecords, updateRecord, sendMessageToUser } from "./feishu.js";
-
 import {
 
   getCustomers,
@@ -19,6 +16,15 @@ import {
   getRecordById,
 
 } from "./feishu.js";
+
+if (process.env.VERCEL !== "1") {
+  try {
+    const dotenv = await import("dotenv");
+    dotenv.default?.config?.();
+  } catch (e) {
+    console.warn("dotenv not loaded", String(e?.message || e));
+  }
+}
 
 
 
@@ -2856,4 +2862,5 @@ if (process.env.VERCEL !== "1") {
 }
 
 export default app;
+
 
