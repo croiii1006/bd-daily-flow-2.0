@@ -27,6 +27,8 @@ import { Plus, ClipboardList, Trash2 } from 'lucide-react';
 import { COMMUNICATION_DURATIONS } from '@/data/options';
 import { DAILY_SUMMARY_COLUMNS } from '@/types/bd';
 import type { DailySummary as DailySummaryType } from '@/types';
+// 飞书时间戳兜底展示
+import { formatDateSafe } from '@/lib/date';
 
 const DailySummary: React.FC = () => {
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
@@ -171,7 +173,9 @@ const DailySummary: React.FC = () => {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <ClipboardList className="h-5 w-5" />
-              {date === new Date().toISOString().split('T')[0] ? '今日' : date} 复盘记录
+              {date === new Date().toISOString().split('T')[0]
+                ? '今日'
+                : (formatDateSafe(date) || date)} 复盘记录
             </CardTitle>
             <CardDescription>
               共 {todaySummaries.length} 条记录
@@ -244,7 +248,7 @@ const DailySummary: React.FC = () => {
                 ) : (
                   allSummaries.map(summary => (
                     <TableRow key={summary.id}>
-                      <TableCell>{summary.date}</TableCell>
+                      <TableCell>{formatDateSafe(summary.date) || '-'}</TableCell>
                       <TableCell className="max-w-[200px] truncate">
                         {summary.projectName}
                       </TableCell>

@@ -20,6 +20,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Search, Calendar, LayoutGrid, Table2, FolderKanban } from 'lucide-react';
 import { cn } from '@/lib/utils';
+// 飞书时间戳兜底展示
+import { formatDateSafe } from '@/lib/date';
 
 const ProjectsTab: React.FC = () => {
   const [projects, setProjects] = useState<Project[]>([]);
@@ -262,10 +264,10 @@ const ProjectsTab: React.FC = () => {
                     <TableCell className="text-xs">{project.am || '-'}</TableCell>
                     <TableCell className="text-xs">{project.totalBdHours ?? '-'}</TableCell>
                     <TableCell className="text-xs text-muted-foreground">
-                      {project.lastUpdateDate || '-'}
+                      {formatDateSafe(project.lastUpdateDate) || '-'}
                     </TableCell>
                     <TableCell className="text-xs text-muted-foreground">
-                      {project.nextFollowDate || '-'}
+                      {formatDateSafe(project.nextFollowDate) || '-'}
                     </TableCell>
                   </TableRow>
                 ))}
@@ -322,7 +324,7 @@ const ProjectsTab: React.FC = () => {
                   <span>BD: {project.bd || '-'}</span>
                   <span className="flex items-center gap-1">
                     <Calendar className="h-3 w-3" />
-                    {project.nextFollowDate || '未设置'}
+                    {formatDateSafe(project.nextFollowDate) || '未设置'}
                   </span>
                 </div>
               </CardContent>
@@ -364,7 +366,7 @@ const ProjectsTab: React.FC = () => {
                 <span>BD: {project.bd}</span>
                 <span className="flex items-center gap-1">
                   <Calendar className="h-3 w-3" />
-                  {project.nextFollowDate || '未设置'}
+                  {formatDateSafe(project.nextFollowDate) || '未设置'}
                 </span>
               </div>
             </CardContent>
@@ -476,11 +478,11 @@ const ProjectsTab: React.FC = () => {
                       </div>
                       <div>
                         <span className="text-muted-foreground">最新更新日期：</span>
-                        <span>{selectedProject.lastUpdateDate || '-'}</span>
+                        <span>{formatDateSafe(selectedProject.lastUpdateDate) || '-'}</span>
                       </div>
                       <div>
                         <span className="text-muted-foreground">下次跟进日期：</span>
-                        <span>{selectedProject.nextFollowDate || '-'}</span>
+                        <span>{formatDateSafe(selectedProject.nextFollowDate) || '-'}</span>
                       </div>
                     </div>
                   </CardContent>

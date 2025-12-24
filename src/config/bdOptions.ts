@@ -210,7 +210,7 @@ export const REMINDER_TABLE_COLUMNS: ReadonlyArray<TableColumn> = [
 
 export const DEAL_TABLE_COLUMNS: ReadonlyArray<TableColumn> = [
   { key: 'serialNo', title: '编号', headClassName: 'w-[90px]' },
-  { key: 'dealId', title: '立项ID', headClassName: 'w-[120px]' },
+  { key: 'projectName', title: '项目名称', headClassName: 'w-[160px]' },
   { key: 'customerId', title: '客户ID', headClassName: 'w-[120px]' },
   { key: 'month', title: '所属月份', headClassName: 'w-[90px]' },
   { key: 'startDate', title: '项目开始时间', headClassName: 'w-[120px]' },

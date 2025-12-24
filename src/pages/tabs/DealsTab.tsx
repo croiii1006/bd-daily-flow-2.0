@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+﻿import React, { useState, useEffect } from 'react';
 import { dataService } from '@/services/dataService';
 import type { Deal, Project } from '@/types/bd';
 import { DEAL_TABLE_COLUMNS, MONTH_OPTIONS } from '@/types/bd';
@@ -7,6 +7,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { FileCheck, TrendingUp, TrendingDown } from 'lucide-react';
+// 飞书时间戳兜底展示
+import { formatDateSafe } from '@/lib/date';
 
 const DealsTab: React.FC = () => {
   const [deals, setDeals] = useState<Deal[]>([]);
@@ -41,9 +43,15 @@ const DealsTab: React.FC = () => {
     setFilteredDeals(result);
   };
 
-  const getProjectName = (projectId: string): string => {
-    const project = projects.find(p => p.projectId === projectId);
-    return project?.projectName || projectId;
+  const projectNameMap = new Map(
+    projects.map((p) => [String(p.projectId || '').trim(), String(p.projectName || '').trim()])
+  );
+
+  const getProjectName = (deal: Deal): string => {
+    const directName = String(deal.projectName || '').trim();
+    if (directName) return directName;
+    const key = String(deal.projectId || deal.dealId || '').trim();
+    return projectNameMap.get(key) || '-';
   };
 
   const formatCurrency = (value?: number | string): string => {
@@ -64,16 +72,18 @@ const DealsTab: React.FC = () => {
     const raw = (deal as any)[key];
     switch (key) {
       case 'serialNo':
+        return raw ?? '';
       case 'dealId':
       case 'projectId':
       case 'customerId':
       case 'projectName':
       case 'month':
+        return raw ?? '';
       case 'startDate':
       case 'endDate':
       case 'firstPaymentDate':
       case 'finalPaymentDate':
-        return raw || '-';
+        return formatDateSafe(raw) || '-';
       case 'isFinished':
         if (raw === true || raw === 'true' || raw === '是') return '是';
         if (raw === false || raw === 'false' || raw === '否') return '否';
@@ -184,7 +194,7 @@ const DealsTab: React.FC = () => {
                       {DEAL_TABLE_COLUMNS.map((c) => (
                         <TableCell key={c.key} className="text-xs">
                           {c.key === 'projectName'
-                            ? getProjectName(deal.projectId)
+                            ? getProjectName(deal)
                             : renderCell(deal, c.key)}
                         </TableCell>
                       ))}
@@ -204,7 +214,7 @@ const DealsTab: React.FC = () => {
             <CardContent className="pt-4">
               <div className="flex items-start justify-between mb-2">
                 <div>
-                  <div className="font-medium text-sm line-clamp-2">{getProjectName(deal.projectId)}</div>
+                  <div className="font-medium text-sm line-clamp-2">{getProjectName(deal)}</div>
                   <div className="text-xs text-muted-foreground mt-1">
                     立项ID: {deal.dealId} · 项目ID: {deal.projectId}
                   </div>
@@ -222,10 +232,10 @@ const DealsTab: React.FC = () => {
                 )}
               </div>
               <div className="grid grid-cols-2 gap-2 mt-3 text-xs">
-                <div><span className="text-muted-foreground">所属月份：</span>{deal.month || '-'}</div>
+                <div><span className="text-muted-foreground">所属月份：</span>{deal.month ?? ''}</div>
                 <div><span className="text-muted-foreground">是否完结：</span>{renderCell(deal, 'isFinished') as any}</div>
-                <div><span className="text-muted-foreground">项目开始：</span>{deal.startDate || '-'}</div>
-                <div><span className="text-muted-foreground">项目结束：</span>{deal.endDate || '-'}</div>
+                <div><span className="text-muted-foreground">项目开始：</span>{formatDateSafe(deal.startDate) || '-'}</div>
+                <div><span className="text-muted-foreground">项目结束：</span>{formatDateSafe(deal.endDate) || '-'}</div>
                 <div><span className="text-muted-foreground">含税收入：</span><span className="font-medium">{formatCurrency(deal.incomeWithTax)}</span></div>
                 <div><span className="text-muted-foreground">不含税收入：</span>{formatCurrency(deal.incomeWithoutTax)}</div>
                 <div><span className="text-muted-foreground">预估成本：</span>{formatCurrency(deal.estimatedCost)}</div>
@@ -234,8 +244,8 @@ const DealsTab: React.FC = () => {
                 <div><span className="text-muted-foreground">毛利率：</span>{formatPercent(deal.grossMargin)}</div>
                 <div><span className="text-muted-foreground">已收金额：</span><span className="text-success">{formatCurrency(deal.receivedAmount)}</span></div>
                 <div><span className="text-muted-foreground">剩余应收：</span><span className="text-warning">{formatCurrency(deal.remainingReceivable)}</span></div>
-                <div><span className="text-muted-foreground">预计首款：</span>{deal.firstPaymentDate || '-'}</div>
-                <div><span className="text-muted-foreground">预计尾款：</span>{deal.finalPaymentDate || '-'}</div>
+                <div><span className="text-muted-foreground">预计首款：</span>{formatDateSafe(deal.firstPaymentDate) || '-'}</div>
+                <div><span className="text-muted-foreground">预计尾款：</span>{formatDateSafe(deal.finalPaymentDate) || '-'}</div>
               </div>
               <div className="mt-2 text-xs text-muted-foreground">
                 签约主体：{deal.signCompany || '-'}

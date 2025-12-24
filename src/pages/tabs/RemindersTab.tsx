@@ -10,6 +10,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Bell, AlertTriangle, Calendar, Clock, CheckCircle2, FileText, FolderOpen } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+// 飞书时间戳兜底展示
+import { formatDateSafe } from '@/lib/date';
 
 const RemindersTab: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'unfinished' | 'finished'>('unfinished');
@@ -214,11 +216,11 @@ const RemindersTab: React.FC = () => {
                               </Badge>
                             </TableCell>
                             <TableCell className="text-xs text-muted-foreground">
-                              {item.lastUpdateDate || '-'}
+                              {formatDateSafe(item.lastUpdateDate) || '-'}
                               <div className="text-destructive">({item.daysSinceUpdate}天前)</div>
                             </TableCell>
                             <TableCell className="text-xs text-muted-foreground">
-                              {item.nextFollowDate || '-'}
+                              {formatDateSafe(item.nextFollowDate) || '-'}
                             </TableCell>
                             <TableCell>
                               {getReminderBadge(item.reminderLevel)}
@@ -268,12 +270,12 @@ const RemindersTab: React.FC = () => {
                       <div className="flex flex-wrap gap-3 mt-3 text-xs text-muted-foreground">
                         <span className="flex items-center gap-1">
                           <Clock className="h-3 w-3" />
-                          更新: {item.lastUpdateDate || '-'}
+                          更新: {formatDateSafe(item.lastUpdateDate) || '-'}
                           <span className="text-destructive">({item.daysSinceUpdate}天前)</span>
                         </span>
                         <span className="flex items-center gap-1">
                           <Calendar className="h-3 w-3" />
-                          跟进: {item.nextFollowDate || '-'}
+                          跟进: {formatDateSafe(item.nextFollowDate) || '-'}
                         </span>
                       </div>
 
@@ -347,7 +349,7 @@ const RemindersTab: React.FC = () => {
                               </Badge>
                             </TableCell>
                             <TableCell className="text-xs">
-                              <div>{item.projectEndDate}</div>
+                              <div>{formatDateSafe(item.projectEndDate) || '-'}</div>
                               <div className={cn(
                                 item.daysUntilEnd < 0 ? 'text-destructive' : 
                                 item.daysUntilEnd === 0 ? 'text-warning' : 'text-muted-foreground'
@@ -406,7 +408,7 @@ const RemindersTab: React.FC = () => {
 
                       <div className="flex items-center gap-2 mt-3 text-xs">
                         <Calendar className="h-3 w-3 text-muted-foreground" />
-                        <span>结束时间: {item.projectEndDate}</span>
+                        <span>结束时间: {formatDateSafe(item.projectEndDate) || '-'}</span>
                         <span className={cn(
                           item.daysUntilEnd < 0 ? 'text-destructive' : 
                           item.daysUntilEnd === 0 ? 'text-warning' : 'text-muted-foreground'
