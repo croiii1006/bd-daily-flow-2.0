@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { feishuApi } from "@/api/feishuApi";
-import type { Client } from "@/types/bd";
+import { dataService } from "@/services/dataService";
+import type { Client, Project } from "@/types/bd";
 
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -176,6 +177,7 @@ const UserProfileName: React.FC<UserProfileNameProps> = ({ name, openId, classNa
 
 const ClientsTab: React.FC = () => {
   const [clients, setClients] = useState<Client[]>([]);
+  const [projects, setProjects] = useState<Project[]>([]);
   const [filteredClients, setFilteredClients] = useState<Client[]>([]);
   const [searchKeyword, setSearchKeyword] = useState("");
   const [levelFilter, setLevelFilter] = useState<string>("all");
@@ -231,15 +233,20 @@ const ClientsTab: React.FC = () => {
       setLoading(true);
       setError(null);
 
-      const rawList: any[] = await feishuApi.getAllCustomers();
+      const [rawList, projectList] = await Promise.all([
+        feishuApi.getAllCustomers(),
+        dataService.getAllProjects(),
+      ]);
       console.log("从后端/飞书获得客户数据：", rawList);
 
       const mapped: Client[] = rawList.map(feishuToClient);
       setClients(mapped);
+      setProjects(projectList || []);
     } catch (e: any) {
       console.error("加载飞书客户失败：", e);
       setError(e?.message || "加载客户数据失败");
       setClients([]);
+      setProjects([]);
     } finally {
       setLoading(false);
     }
@@ -287,6 +294,26 @@ const ClientsTab: React.FC = () => {
         return "outline";
     }
   };
+
+  const projectsByCustomerId = useMemo(() => {
+    const map = new Map<string, Project[]>();
+    projects.forEach((p) => {
+      const key = String(p.customerId || "").trim();
+      if (!key) return;
+      const list = map.get(key) || [];
+      list.push(p);
+      map.set(key, list);
+    });
+    return map;
+  }, [projects]);
+
+  const getRelatedProjects = (client: Client) => {
+    const key = String(client.customerId || client.id || "").trim();
+    if (!key) return [] as Project[];
+    return projectsByCustomerId.get(key) || [];
+  };
+
+  const selectedRelatedProjects = selectedClient ? getRelatedProjects(selectedClient) : [];
 
   return (
     <div className="space-y-4">
@@ -360,62 +387,74 @@ const ClientsTab: React.FC = () => {
 
       {/* 客户卡片 */}
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        {filteredClients.map((client) => (
-          <Card
-            key={client.id}
-            className="cursor-pointer transition-all hover:shadow-md hover:border-primary/50"
-            onClick={() => handleClientClick(client)}
-          >
-            <CardContent className="pt-4">
-              <div className="flex items-start justify-between">
-                <div className="space-y-1">
-                  <div className="flex items-center gap-2">
-                    <h3 className="font-medium text-foreground">
-                      {client.shortName || "-"}
-                    </h3>
-                    <Badge
-                      variant={getLevelBadgeVariant(client.level)}
-                      className="text-xs"
-                    >
-                      {client.level || "-"}
-                    </Badge>
+        {filteredClients.map((client) => {
+          const relatedProjects = getRelatedProjects(client);
+          return (
+            <Card
+              key={client.id}
+              className="cursor-pointer transition-all hover:shadow-md hover:border-primary/50"
+              onClick={() => handleClientClick(client)}
+            >
+              <CardContent className="pt-4">
+                <div className="flex items-start justify-between">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <h3 className="font-medium text-foreground">
+                        {client.shortName || "-"}
+                      </h3>
+                      <Badge
+                        variant={getLevelBadgeVariant(client.level)}
+                        className="text-xs"
+                      >
+                        {client.level || "-"}
+                      </Badge>
+                    </div>
+                    <p className="text-sm text-muted-foreground">
+                      {client.companyName || "-"}
+                    </p>
                   </div>
-                  <p className="text-sm text-muted-foreground">
-                    {client.companyName || "-"}
-                  </p>
+
+                  {client.isAnnual && (
+                    <Badge
+                      variant="outline"
+                      className="text-xs bg-success/10 text-success border-success/30"
+                    >
+                      年框
+                    </Badge>
+                  )}
                 </div>
 
-                {client.isAnnual && (
-                  <Badge
-                    variant="outline"
-                    className="text-xs bg-success/10 text-success border-success/30"
-                  >
-                    年框
-                  </Badge>
+                <div className="mt-3 flex flex-wrap gap-2 text-xs text-muted-foreground">
+                  <span className="flex items-center gap-1">
+                    <Tag className="h-3 w-3" />
+                    {client.industry || "-"}
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <MapPin className="h-3 w-3" />
+                    {client.hq || "-"}
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <User className="h-3 w-3" />
+                    <UserProfileName name={client.owner || "-"} openId={client.ownerOpenId} />
+                  </span>
+                </div>
+
+                <div className="mt-2 text-xs text-muted-foreground">
+                  关联项目: {relatedProjects.length} 个
+                </div>
+                {relatedProjects.length > 0 && (
+                  <div className="mt-1 text-xs text-muted-foreground line-clamp-2">
+                    {relatedProjects
+                      .slice(0, 2)
+                      .map((p) => String(p.projectName || p.projectId || "-"))
+                      .join("、")}
+                    {relatedProjects.length > 2 ? ` 等 ${relatedProjects.length} 个` : ""}
+                  </div>
                 )}
-              </div>
-
-              <div className="mt-3 flex flex-wrap gap-2 text-xs text-muted-foreground">
-                <span className="flex items-center gap-1">
-                  <Tag className="h-3 w-3" />
-                  {client.industry || "-"}
-                </span>
-                <span className="flex items-center gap-1">
-                  <MapPin className="h-3 w-3" />
-                  {client.hq || "-"}
-                </span>
-                <span className="flex items-center gap-1">
-                  <User className="h-3 w-3" />
-                  <UserProfileName name={client.owner || "-"} openId={client.ownerOpenId} />
-                </span>
-              </div>
-
-              <div className="mt-2 text-xs text-muted-foreground">
-                关联项目: {client.relatedProjectIds?.length || 0} 个
-              </div>
-            </CardContent>
-          </Card>
-        ))}
+              </CardContent>
+            </Card>
+          );
+        })}
       </div>
 
       {!loading && !error && filteredClients.length === 0 && (
@@ -486,18 +525,18 @@ const ClientsTab: React.FC = () => {
                 <Card>
                   <CardHeader className="py-3">
                     <CardTitle className="text-sm">
-                      关联项目 ({selectedClient.relatedProjectIds?.length || 0})
+                      关联项目 ({selectedRelatedProjects.length})
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="pt-0">
-                    {(selectedClient.relatedProjectIds?.length || 0) > 0 ? (
+                    {selectedRelatedProjects.length > 0 ? (
                       <div className="space-y-2">
-                        {selectedClient.relatedProjectIds!.map((pid) => (
+                        {selectedRelatedProjects.map((p) => (
                           <div
-                            key={pid}
+                            key={p.projectId || p.projectName}
                             className="rounded-lg border p-3 text-sm font-mono"
                           >
-                            {pid}
+                            {p.projectName || p.projectId || "-"}
                           </div>
                         ))}
                       </div>
