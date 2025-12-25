@@ -1747,6 +1747,21 @@ export default function DailyFormTab() {
                   />
                 </div>
 
+                {updateDealDrafts.length > 0 && (
+                  <div className="space-y-2">
+                    <Label>待更新立项列表</Label>
+                    {updateDealDrafts.map((d, idx) => (
+                      <div key={d.localId} className="flex items-center justify-between gap-3 rounded-md border px-3 py-2">
+                        <div className="min-w-0">
+                          <div className="text-sm font-medium truncate">{idx + 1}. {d.projectName || "-"}</div>
+                          <div className="text-xs text-muted-foreground truncate">立项ID: {d.dealId}</div>
+                        </div>
+                        <Button type="button" variant="ghost" size="sm" onClick={() => setUpdateDealDrafts((prev) => prev.filter((x) => x.localId !== d.localId))}>移除</Button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
                 {updateDealDraft && (
                   <div className="space-y-4 rounded-lg border p-4">
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -1776,21 +1791,6 @@ export default function DailyFormTab() {
                         setUpdateDealDraft(null);
                       }}><Plus className="mr-1 h-4 w-4" /> 添加一个要修改的立项</Button>
                     </div>
-
-                    {updateDealDrafts.length > 0 && (
-                      <div className="space-y-2">
-                        <Label>待更新立项列表</Label>
-                        {updateDealDrafts.map((d, idx) => (
-                          <div key={d.localId} className="flex items-center justify-between gap-3 rounded-md border px-3 py-2">
-                            <div className="min-w-0">
-                              <div className="text-sm font-medium truncate">{idx + 1}. {d.projectName || "-"}</div>
-                              <div className="text-xs text-muted-foreground truncate">立项ID: {d.dealId}</div>
-                            </div>
-                            <Button type="button" variant="ghost" size="sm" onClick={() => setUpdateDealDrafts((prev) => prev.filter((x) => x.localId !== d.localId))}>移除</Button>
-                          </div>
-                        ))}
-                      </div>
-                    )}
                   </div>
                 )}
               </div>
