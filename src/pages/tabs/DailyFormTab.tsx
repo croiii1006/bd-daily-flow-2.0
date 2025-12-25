@@ -1652,9 +1652,19 @@ export default function DailyFormTab() {
             <CardTitle className="flex items-center gap-2">
               <FolderPlus className="h-5 w-5" /> 步骤 5：是否更新已有立项项目？
             </CardTitle>
+            <CardDescription>选择“是”后可搜索立项并添加待更新列表。</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-
+            <RadioGroup value={hasUpdateDeal} onValueChange={setHasUpdateDeal} className="flex gap-6">
+              <div className="flex items-center space-x-2">
+                <RadioGroupItem value="yes" id="s5-yes" />
+                <Label htmlFor="s5-yes">是</Label>
+              </div>
+              <div className="flex items-center space-x-2">
+                <RadioGroupItem value="no" id="s5-no" />
+                <Label htmlFor="s5-no">否</Label>
+              </div>
+            </RadioGroup>
             
             {pendingNewDeals.length > 0 && (
               <div className="space-y-3 rounded-lg border p-4">
