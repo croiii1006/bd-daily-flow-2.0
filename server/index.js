@@ -183,6 +183,8 @@ app.get("/api/notify/daily", async (req, res) => {
       return res.status(400).json({ success: false, error: "missing DAILY_FORM_URL" });
     }
 
+    const title = String(req.query.title || "每日表单填写链接").trim();
+
     const openIds = DAILY_FORM_BD_OPEN_IDS.length
       ? DAILY_FORM_BD_OPEN_IDS
       : [
@@ -191,7 +193,7 @@ app.get("/api/notify/daily", async (req, res) => {
           "ou_f5dac90ed9608641db9db9fa39e2a0ec",
         ];
 
-    const text = `每日表单填写链接：${url}`;
+    const text = `${title}：${url}`;
     const results = [];
     for (const openId of openIds) {
       try {
