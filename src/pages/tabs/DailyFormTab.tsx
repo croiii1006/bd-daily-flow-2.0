@@ -257,7 +257,6 @@ const dealToDraft = (deal: Deal): DealDraft => ({
 
 const validateDealDraft = (d: DealDraft) =>
   !isBlank(d.dealId) &&
-  !isBlank(d.projectId) &&
   !isBlank(d.projectName) &&
   !isBlank(d.startDate) &&
   !isBlank(d.endDate) &&
@@ -1736,7 +1735,7 @@ export default function DailyFormTab() {
                     items={dealSearchResults.map((d: any) => ({
                       key: String(d.dealId),
                       title: String(d.projectName || d.dealId || "-"),
-                      subtitle: `立项ID: ${String(d.dealId)} / 项目ID: ${String(d.projectId || "-")}`,
+                      subtitle: `立项ID: ${String(d.dealId)}`,
                       onPick: () => {
                         const draft = dealToDraft(d);
                         if (!draft.dealId) return toast.error("该立项缺少 dealId，无法更新");
