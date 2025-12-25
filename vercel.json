@@ -19,7 +19,7 @@
     },
     {
       "path": "/api/notify/daily?title=每日表单&url=https%3A%2F%2Fbd-daily-flow-2-0.vercel.app%2F",
-      "schedule": "56 8 * * 1-5"
+      "schedule": "7 9 * * 1-5"
     }
   ]
 }

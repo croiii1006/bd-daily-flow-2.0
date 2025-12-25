@@ -168,6 +168,8 @@ app.get("/api/debug-env", (req, res) => {
 // ====== 定时提醒：每日表单 ======
 app.get("/api/notify/daily", async (req, res) => {
   try {
+    const isCron = String(req.headers["x-vercel-cron"] || "").toLowerCase() === "true";
+    console.log("notify daily", { isCron, query: req.query });
     if (CRON_SECRET) {
       const header = String(req.headers.authorization || "");
       const token = header.toLowerCase().startsWith("bearer ")
@@ -2879,5 +2881,4 @@ if (process.env.VERCEL !== "1") {
 }
 
 export default app;
-
 
