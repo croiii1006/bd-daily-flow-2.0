@@ -1,4 +1,4 @@
-﻿
+﻿﻿
 
 
 
@@ -193,7 +193,12 @@ app.get("/api/notify/daily", async (req, res) => {
           "ou_f5dac90ed9608641db9db9fa39e2a0ec",
         ];
 
-    const text = `${title}：${url}`;
+    let text = `${title}：${url}`;
+    if (title.includes("提醒预览")) {
+      text = `请点击链接中的"提醒预览"，查收需要跟进的项目提醒：${url}`;
+    } else if (title.includes("每日表单")) {
+      text = `请点击链接中的"每日表单"进行填写：${url}`;
+    }
     const results = [];
     for (const openId of openIds) {
       try {
