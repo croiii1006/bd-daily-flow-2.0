@@ -93,6 +93,7 @@ type DealDraft = {
 const makeLocalId = () => `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 const makeDealId = () => `deal_${Date.now()}_${Math.random().toString(16).slice(2)}`;
 const DEAL_BELONG_OPTIONS = ["客户", "战略发展部"] as const;
+const REQUEST_CONCURRENCY = 3;
 
 const isBlank = (v: unknown) => !String(v ?? "").trim();
 const numOrUndef = (v: string) => {
@@ -100,6 +101,18 @@ const numOrUndef = (v: string) => {
   if (!s) return undefined;
   const n = Number(s);
   return Number.isFinite(n) ? n : undefined;
+};
+
+const runWithLimit = async <T,>(items: T[], limit: number, worker: (item: T) => Promise<void>) => {
+  const queue = [...items];
+  const workers = new Array(Math.min(limit, queue.length)).fill(null).map(async () => {
+    while (queue.length > 0) {
+      const next = queue.shift();
+      if (!next) return;
+      await worker(next);
+    }
+  });
+  await Promise.all(workers);
 };
 
 const formatDateSlash = (date: Date) => {
@@ -538,9 +551,9 @@ export default function DailyFormTab() {
     try {
       const today = formatDateSlash(new Date());
       const nextFollowDate = formatDateSlash(getNextWorkingDay(new Date()));
-      for (const entry of timeEntries) {
+      await runWithLimit(timeEntries, REQUEST_CONCURRENCY, async (entry) => {
         const project = projects.find((p: any) => p.projectId === entry.projectId) as any;
-        if (!project) continue;
+        if (!project) return;
         // 必须先拿到项目已有累计值，再加上本次填写的小时数，避免字符串拼接
         const existingHours = numOrUndef(project.totalBdHours) ?? 0;
         await dataService.updateProject(entry.projectId, {
@@ -548,7 +561,7 @@ export default function DailyFormTab() {
           lastUpdateDate: today,
           nextFollowDate,
         } as any);
-      }
+      });
       await dataService.createDailyForm({
         date: new Date().toISOString().split("T")[0],
         hasNewClient: hasNewClient === "yes",
@@ -602,7 +615,7 @@ export default function DailyFormTab() {
       if (isBlank(d.customerId)) return toast.error(`第 ${i + 1} 条立项客户ID为空，请稍后重试`);
     }
     try {
-      for (const d of pendingNewDeals) {
+      await runWithLimit(pendingNewDeals, REQUEST_CONCURRENCY, async (d) => {
         const { dealId, ...patch } = d;
         await dataService.updateDeal(dealId, {
           ...patch,
@@ -616,7 +629,7 @@ export default function DailyFormTab() {
           paidThirdPartyCost: numOrUndef(d.paidThirdPartyCost),
           receivedAmount: numOrUndef(d.receivedAmount),
         } as any);
-      }
+      });
       toast.success(`立项信息已同步飞书：${pendingNewDeals.length} 条`);
       setPendingNewDeals([]);
       await loadData();
@@ -638,7 +651,7 @@ export default function DailyFormTab() {
           if (!validateNewClient(candidates[i])) return toast.error(`第 ${i + 1} 个客户信息未填完整（带 * 的必填）`);
         }
         try {
-          for (const c of candidates) {
+          await runWithLimit(candidates, REQUEST_CONCURRENCY, async (c) => {
             await dataService.createClient({
               shortName: c.shortName.trim(),
               companyName: c.companyName.trim(),
@@ -651,7 +664,7 @@ export default function DailyFormTab() {
               ownerBd: c.ownerBd.trim(),
               relatedProjectIds: [],
             } as any);
-          }
+          });
           toast.success(`客户创建成功（已写回飞书）：${candidates.length} 个`);
           setNewClientDrafts([]);
           setNewClientDraft(makeEmptyNewClient());
@@ -674,14 +687,14 @@ export default function DailyFormTab() {
           if (isBlank(c.customerId) || !validateNewClient(c)) return toast.error(`第 ${i + 1} 个客户信息未填完整（带 * 的必填）`);
         }
         try {
-          for (const c of candidates) {
+          await runWithLimit(candidates, REQUEST_CONCURRENCY, async (c) => {
             const { customerId, ...patch } = c;
             const ownerUserId = projectPersonIdMap[String(c.ownerBd || "").trim()];
             const payload = ownerUserId
               ? { ...patch, cooperationStatus: c.cooperationStatus, ownerUserId }
               : { ...patch, cooperationStatus: c.cooperationStatus };
             await dataService.updateClient(customerId, payload as any);
-          }
+          });
           toast.success(`客户更新成功（已写回飞书）：${candidates.length} 个`);
           setUpdateClientDrafts([]);
           setUpdateClientDraft(null);
@@ -706,7 +719,7 @@ export default function DailyFormTab() {
           if (!validateNewProject(candidates[i])) return toast.error(`第 ${i + 1} 条项目必填项未填完整（带 * 的必填）`);
         }
         try {
-          for (const p of candidates) {
+          await runWithLimit(candidates, REQUEST_CONCURRENCY, async (p) => {
             const bdId = projectPersonIdMap[String(p.bd || "").trim()];
             const amId = projectPersonIdMap[String(p.am || "").trim()];
             const bdValue = bdId ? ({ id: bdId } as any) : p.bd;
@@ -729,7 +742,7 @@ export default function DailyFormTab() {
               lastUpdateDate: p.lastUpdateDate,
               nextFollowDate: p.nextFollowDate,
             } as any);
-          }
+          });
           toast.success(`项目创建成功（已写回飞书）：${candidates.length} 条`);
           setNewProjectDrafts([]);
           setNewProjectDraft(makeEmptyNewProjectDraft());
@@ -761,7 +774,7 @@ export default function DailyFormTab() {
           return p.projectType === "签单" && String(origin?.projectType || "") !== "签单";
         });
         try {
-          for (const p of candidates) {
+          await runWithLimit(candidates, REQUEST_CONCURRENCY, async (p) => {
             const bdId = projectPersonIdMap[String(p.bd || "").trim()];
             const amId = projectPersonIdMap[String(p.am || "").trim()];
             const bdValue = bdId ? ({ id: bdId } as any) : p.bd;
@@ -784,7 +797,7 @@ export default function DailyFormTab() {
               lastUpdateDate: p.lastUpdateDate,
               nextFollowDate: p.nextFollowDate,
             } as any);
-          }
+          });
 
           let nextPendingDeals: DealDraft[] = [];
           if (signedTransitions.length > 0) {
@@ -846,7 +859,7 @@ export default function DailyFormTab() {
           if (!validateDealDraft(candidates[i])) return toast.error(`第 ${i + 1} 条立项信息未填完整（带 * 的必填）`);
         }
         try {
-          for (const d of candidates) {
+          await runWithLimit(candidates, REQUEST_CONCURRENCY, async (d) => {
             const { dealId, ...patch } = d;
             await dataService.updateDeal(dealId, {
               ...patch,
@@ -860,7 +873,7 @@ export default function DailyFormTab() {
               paidThirdPartyCost: numOrUndef(d.paidThirdPartyCost),
               receivedAmount: numOrUndef(d.receivedAmount),
             } as any);
-          }
+          });
           toast.success(`项目更新成功（已写回飞书）：${candidates.length} 条`);
           setUpdateDealDrafts([]);
           setUpdateDealDraft(null);

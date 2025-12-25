@@ -25,6 +25,26 @@ app.use(cors({ origin: true, credentials: true }));
 
 app.use(express.json({ limit: "2mb" }));
 
+const API_CACHE_TTL_MS = Number(process.env.API_CACHE_TTL_MS || 30000);
+const apiCache = new Map();
+function getCached(key) {
+  const hit = apiCache.get(key);
+  if (!hit) return null;
+  if (Date.now() > hit.expireAt) {
+    apiCache.delete(key);
+    return null;
+  }
+  return hit.value;
+}
+async function withCache(key, ttlMs, fetcher) {
+  if (!ttlMs || ttlMs <= 0) return fetcher();
+  const cached = getCached(key);
+  if (cached !== null) return cached;
+  const value = await fetcher();
+  apiCache.set(key, { value, expireAt: Date.now() + ttlMs });
+  return value;
+}
+
 
 
 const PORT = process.env.PORT || 4000;
@@ -263,7 +283,8 @@ app.get("/api/customers", async (req, res) => {
 
     const keyword = (req.query.keyword || "").toString().trim();
 
-    const data = await getCustomers({ keyword });
+    const cacheKey = `customers:${keyword || "all"}`;
+    const data = await withCache(cacheKey, API_CACHE_TTL_MS, () => getCustomers({ keyword }));
 
     res.json({ success: true, data });
 
@@ -1276,19 +1297,16 @@ app.get("/api/projects", async (req, res) => {
 
 
 
-    const records = await listRecords({
-
-      appToken: PROJECT_APP_TOKEN,
-
-      tableId: PROJECT_TABLE_ID,
-
-      pageSize: 200,
-
+    const projectsAll = await withCache("projects:all", API_CACHE_TTL_MS, async () => {
+      const records = await listRecords({
+        appToken: PROJECT_APP_TOKEN,
+        tableId: PROJECT_TABLE_ID,
+        pageSize: 200,
+      });
+      return (records || []).map((it) => mapProjectRecord(it));
     });
 
-
-
-    let projects = (records || []).map((it) => mapProjectRecord(it));
+    let projects = projectsAll || [];
 
 
 
@@ -2028,19 +2046,16 @@ app.get("/api/deals", async (req, res) => {
 
 
 
-    const records = await listRecords({
-
-      appToken: DEAL_APP_TOKEN,
-
-      tableId: DEAL_TABLE_ID,
-
-      pageSize: 200,
-
+    const dealsAll = await withCache("deals:all", API_CACHE_TTL_MS, async () => {
+      const records = await listRecords({
+        appToken: DEAL_APP_TOKEN,
+        tableId: DEAL_TABLE_ID,
+        pageSize: 200,
+      });
+      return (records || []).map((it) => mapDealRecord(it));
     });
 
-
-
-    let deals = (records || []).map((it) => mapDealRecord(it));
+    let deals = dealsAll || [];
 
 
 
