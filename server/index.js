@@ -1893,6 +1893,7 @@ const DEAL_FIELD = {
   projectName: "项目名称",
   startDate: "项目开始时间",
   endDate: "项目结束时间",
+  belong: "归属",
   isFinished: "是否完结",
   signCompany: "签约公司主体",
   contractEntity: "合同主体",
@@ -1948,6 +1949,7 @@ function mapDealRecord(it = {}) {
     projectName: f[DEAL_FIELD.projectName] || f.projectName || "",
     startDate: f[DEAL_FIELD.startDate] || f["项目开始日期"] || f.startDate || "",
     endDate: f[DEAL_FIELD.endDate] || f["项目结束日期"] || f.endDate || "",
+    belong: f[DEAL_FIELD.belong] || f["归属"] || f.belong || "",
     isFinished: f[DEAL_FIELD.isFinished] ?? f.isFinished ?? "",
     signCompany: f[DEAL_FIELD.signCompany] || f.signCompany || "",
     contractEntity: f[DEAL_FIELD.contractEntity] || f.contractEntity || "",
@@ -2212,6 +2214,7 @@ app.post("/api/deals", async (req, res) => {
     setIf("项目开始日期", toUnixTs(body.startDate));
 
     setIf("项目结束时间", toUnixTs(body.endDate));
+    setIf("归属", body.belong);
 
     setIf("是否完结", body.isFinished);
 
@@ -2441,6 +2444,7 @@ app.put("/api/deals/:dealId", async (req, res) => {
     setIf("项目开始日期", toUnixTs(body.startDate));
 
     setIf("项目结束时间", toUnixTs(body.endDate));
+    setIf("归属", body.belong);
 
     setIf("是否完结", body.isFinished);
 

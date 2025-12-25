@@ -81,6 +81,7 @@ export interface Deal {
 
   startDate?: string;
   endDate?: string;
+  belong?: string;
   isFinished?: string | boolean;
 
   signCompany?: string;

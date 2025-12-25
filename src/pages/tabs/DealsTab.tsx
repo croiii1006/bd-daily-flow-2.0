@@ -261,6 +261,10 @@ const DealsTab: React.FC = () => {
                 <span>{formatDateSafe(selectedDeal.endDate) || '-'}</span>
               </div>
               <div>
+                <span className="text-muted-foreground">归属：</span>
+                <span>{selectedDeal.belong || '-'}</span>
+              </div>
+              <div>
                 <span className="text-muted-foreground">含税收入：</span>
                 <span>{formatCurrency(selectedDeal.incomeWithTax)}</span>
               </div>

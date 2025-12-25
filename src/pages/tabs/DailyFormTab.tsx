@@ -78,6 +78,7 @@ type DealDraft = {
   projectName: string;
   startDate: string;
   endDate: string;
+  belong: string;
   isFinished: string;
   contractEntity: string;
   incomeWithTax: string;
@@ -91,6 +92,7 @@ type DealDraft = {
 
 const makeLocalId = () => `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 const makeDealId = () => `deal_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+const DEAL_BELONG_OPTIONS = ["客户", "战略发展部"] as const;
 
 const isBlank = (v: unknown) => !String(v ?? "").trim();
 const numOrUndef = (v: string) => {
@@ -241,6 +243,7 @@ const dealToDraft = (deal: Deal): DealDraft => ({
   projectName: String((deal as any).projectName || "").trim(),
   startDate: String((deal as any).startDate || "").trim(),
   endDate: String((deal as any).endDate || "").trim(),
+  belong: String((deal as any).belong || "").trim(),
   isFinished: String((deal as any).isFinished ?? "").trim(),
   contractEntity: String((deal as any).contractEntity || (deal as any).signCompany || "").trim(),
   incomeWithTax: (deal as any).incomeWithTax != null ? String((deal as any).incomeWithTax) : "",
@@ -765,6 +768,7 @@ export default function DailyFormTab() {
                 projectName,
                 startDate: String(related?.startDate || "").trim(),
                 endDate: String(related?.endDate || "").trim(),
+                belong: String(related?.belong || "").trim(),
                 isFinished: String(related?.isFinished ?? "").trim() || "否",
                 contractEntity: String(related?.contractEntity || related?.signCompany || "").trim(),
                 incomeWithTax: related?.incomeWithTax != null ? String(related.incomeWithTax) : "",
@@ -809,6 +813,7 @@ export default function DailyFormTab() {
             await dataService.updateDeal(dealId, {
               ...patch,
               customerId: d.customerId || undefined,
+              belong: d.belong || undefined,
               signCompany: d.contractEntity,
               contractEntity: d.contractEntity,
               incomeWithTax: numOrUndef(d.incomeWithTax),
@@ -839,6 +844,7 @@ export default function DailyFormTab() {
             await dataService.updateDeal(dealId, {
               ...patch,
               customerId: d.customerId || undefined,
+              belong: d.belong || undefined,
               signCompany: d.contractEntity,
               contractEntity: d.contractEntity,
               incomeWithTax: numOrUndef(d.incomeWithTax),
@@ -1674,6 +1680,10 @@ export default function DailyFormTab() {
                         <Input type="date" value={slashToInputDate(d.endDate)} onChange={(e) => setPendingNewDeals((prev) => prev.map((x) => x.projectId === d.projectId ? { ...x, endDate: inputDateToSlash(e.target.value) } : x))} />
                       </div>
                       <div className="space-y-2">
+                        <Label>归属</Label>
+                        <OptionSelect value={d.belong} onValueChange={(v) => setPendingNewDeals((prev) => prev.map((x) => x.projectId === d.projectId ? { ...x, belong: v } : x))} placeholder="选择归属" options={DEAL_BELONG_OPTIONS} />
+                      </div>
+                      <div className="space-y-2">
                         <Label>是否完结 *</Label>
                         <OptionSelect value={d.isFinished} onValueChange={(v) => setPendingNewDeals((prev) => prev.map((x) => x.projectId === d.projectId ? { ...x, isFinished: v } : x))} placeholder="选择" options={COMPLETION_STATUS} />
                       </div>
@@ -1725,6 +1735,7 @@ export default function DailyFormTab() {
                       <div className="space-y-2 sm:col-span-2"><Label>项目名称 *</Label><Input value={updateDealDraft.projectName} onChange={(e) => setUpdateDealDraft({ ...updateDealDraft, projectName: e.target.value })} /></div>
                       <div className="space-y-2"><Label>项目开始时间 *</Label><Input type="date" value={slashToInputDate(updateDealDraft.startDate)} onChange={(e) => setUpdateDealDraft({ ...updateDealDraft, startDate: inputDateToSlash(e.target.value) })} /></div>
                       <div className="space-y-2"><Label>项目结束时间 *</Label><Input type="date" value={slashToInputDate(updateDealDraft.endDate)} onChange={(e) => setUpdateDealDraft({ ...updateDealDraft, endDate: inputDateToSlash(e.target.value) })} /></div>
+                      <div className="space-y-2"><Label>归属</Label><OptionSelect value={updateDealDraft.belong} onValueChange={(v) => setUpdateDealDraft({ ...updateDealDraft, belong: v })} placeholder="选择归属" options={DEAL_BELONG_OPTIONS} /></div>
                       <div className="space-y-2"><Label>是否完结 *</Label><OptionSelect value={updateDealDraft.isFinished} onValueChange={(v) => setUpdateDealDraft({ ...updateDealDraft, isFinished: v })} placeholder="选择" options={COMPLETION_STATUS} /></div>
                       <div className="space-y-2"><Label>签约公司主体 *</Label><OptionSelect value={updateDealDraft.contractEntity} onValueChange={(v) => setUpdateDealDraft({ ...updateDealDraft, contractEntity: v })} placeholder="选择签约主体" options={CONTRACT_ENTITIES} /></div>
                       <div className="space-y-2"><Label>含税收入</Label><Input type="number" value={updateDealDraft.incomeWithTax} onChange={(e) => setUpdateDealDraft({ ...updateDealDraft, incomeWithTax: e.target.value })} /></div>
