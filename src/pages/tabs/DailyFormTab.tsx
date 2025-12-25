@@ -595,6 +595,39 @@ export default function DailyFormTab() {
     }
   };
 
+  const submitPendingDeals = async () => {
+    if (pendingNewDeals.length === 0) return;
+    for (let i = 0; i < pendingNewDeals.length; i += 1) {
+      const d = pendingNewDeals[i];
+      if (!validateDealDraft(d)) return toast.error(`第 ${i + 1} 条立项信息未填完整（带 * 的必填）`);
+      if (isBlank(d.customerId)) return toast.error(`第 ${i + 1} 条立项客户ID为空，请稍后重试`);
+    }
+    try {
+      for (const d of pendingNewDeals) {
+        const { dealId, ...patch } = d;
+        await dataService.updateDeal(dealId, {
+          ...patch,
+          customerId: d.customerId || undefined,
+          belong: d.belong || undefined,
+          signCompany: d.contractEntity,
+          contractEntity: d.contractEntity,
+          incomeWithTax: numOrUndef(d.incomeWithTax),
+          incomeWithoutTax: numOrUndef(d.incomeWithoutTax),
+          estimatedCost: numOrUndef(d.estimatedCost),
+          paidThirdPartyCost: numOrUndef(d.paidThirdPartyCost),
+          receivedAmount: numOrUndef(d.receivedAmount),
+        } as any);
+      }
+      toast.success(`立项信息已同步飞书：${pendingNewDeals.length} 条`);
+      setPendingNewDeals([]);
+      await loadData();
+      setCurrentStep(5);
+    } catch (e: any) {
+      console.error(e);
+      return toast.error(e?.message || "同步立项失败");
+    }
+  };
+
   const handleNext = async () => {
     if (currentStep === 1) {
       if (hasNewClient === "yes") {
@@ -714,6 +747,9 @@ export default function DailyFormTab() {
 
     
     if (currentStep === 4) {
+      if (pendingNewDeals.length > 0) {
+        return toast.error("请先补充签单项目的立项信息");
+      }
       if (hasUpdateProject === "yes") {
         const candidates = [...updateProjectDrafts, ...(updateProjectDraft ? [updateProjectDraft] : [])];
         if (candidates.length === 0) return toast.error("请至少选择 1 条要更新的项目");
@@ -791,6 +827,9 @@ export default function DailyFormTab() {
           setUpdateProjectDraft(null);
           setProjectSearchKeyword("");
           await loadData();
+          if (nextPendingDeals.length > 0) {
+            return;
+          }
         } catch (e: any) {
           console.error(e);
           return toast.error(e?.message || "更新项目失败");
@@ -801,37 +840,6 @@ export default function DailyFormTab() {
     }
 
     if (currentStep === 5) {
-      if (pendingNewDeals.length > 0) {
-        for (let i = 0; i < pendingNewDeals.length; i += 1) {
-          const d = pendingNewDeals[i];
-          if (!validateDealDraft(d)) return toast.error(`第 ${i + 1} 条立项信息未填完整（带 * 的必填）`);
-          if (isBlank(d.customerId)) return toast.error(`第 ${i + 1} 条立项客户ID为空，请稍后重试`);
-        }
-        try {
-          for (const d of pendingNewDeals) {
-            const { dealId, ...patch } = d;
-            await dataService.updateDeal(dealId, {
-              ...patch,
-              customerId: d.customerId || undefined,
-              belong: d.belong || undefined,
-              signCompany: d.contractEntity,
-              contractEntity: d.contractEntity,
-              incomeWithTax: numOrUndef(d.incomeWithTax),
-              incomeWithoutTax: numOrUndef(d.incomeWithoutTax),
-              estimatedCost: numOrUndef(d.estimatedCost),
-              paidThirdPartyCost: numOrUndef(d.paidThirdPartyCost),
-              receivedAmount: numOrUndef(d.receivedAmount),
-            } as any);
-          }
-          toast.success(`立项信息已同步飞书：${pendingNewDeals.length} 条`);
-          setPendingNewDeals([]);
-          await loadData();
-        } catch (e: any) {
-          console.error(e);
-          return toast.error(e?.message || "同步立项失败");
-        }
-      }
-
       if (hasUpdateDeal === "yes") {
         const candidates = [...updateDealDrafts, ...(updateDealDraft ? [updateDealDraft] : [])];
         if (candidates.length === 0) return toast.error("请至少选择 1 条要更新的立项");
@@ -1630,6 +1638,59 @@ export default function DailyFormTab() {
                   </div>
                 )}
 
+                {pendingNewDeals.length > 0 && (
+                  <div className="space-y-3 rounded-lg border p-4">
+                    <div className="text-sm font-medium">签单项目需要补充立项信息（将同步写回立项表）</div>
+                    {pendingNewDeals.map((d, idx) => (
+                      <div key={d.projectId} className="rounded-md border p-3 space-y-3">
+                        <div className="text-sm font-medium">{idx + 1}. {d.projectName}</div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                          <div className="space-y-2 sm:col-span-2">
+                            <Label>立项ID（默认项目ID，不可修改）*</Label>
+                            <Input value={d.dealId} disabled />
+                          </div>
+                          <div className="space-y-2 sm:col-span-2">
+                            <Label>客户ID（来自飞书，不可修改）*</Label>
+                            <Input value={d.customerId} disabled />
+                          </div>
+                          <div className="space-y-2">
+                            <Label>项目开始时间 *</Label>
+                            <Input type="date" value={slashToInputDate(d.startDate)} onChange={(e) => setPendingNewDeals((prev) => prev.map((x) => x.projectId === d.projectId ? { ...x, startDate: inputDateToSlash(e.target.value) } : x))} />
+                          </div>
+                          <div className="space-y-2">
+                            <Label>项目结束时间 *</Label>
+                            <Input type="date" value={slashToInputDate(d.endDate)} onChange={(e) => setPendingNewDeals((prev) => prev.map((x) => x.projectId === d.projectId ? { ...x, endDate: inputDateToSlash(e.target.value) } : x))} />
+                          </div>
+                          <div className="space-y-2">
+                            <Label>归属</Label>
+                            <OptionSelect value={d.belong} onValueChange={(v) => setPendingNewDeals((prev) => prev.map((x) => x.projectId === d.projectId ? { ...x, belong: v } : x))} placeholder="选择归属" options={DEAL_BELONG_OPTIONS} />
+                          </div>
+                          <div className="space-y-2">
+                            <Label>是否完结 *</Label>
+                            <OptionSelect value={d.isFinished} onValueChange={(v) => setPendingNewDeals((prev) => prev.map((x) => x.projectId === d.projectId ? { ...x, isFinished: v } : x))} placeholder="选择" options={COMPLETION_STATUS} />
+                          </div>
+                          <div className="space-y-2">
+                            <Label>签约公司主体 *</Label>
+                            <OptionSelect value={d.contractEntity} onValueChange={(v) => setPendingNewDeals((prev) => prev.map((x) => x.projectId === d.projectId ? { ...x, contractEntity: v } : x))} placeholder="选择签约主体" options={CONTRACT_ENTITIES} />
+                          </div>
+                          <div className="space-y-2"><Label>含税收入</Label><Input type="number" value={d.incomeWithTax} onChange={(e) => setPendingNewDeals((prev) => prev.map((x) => x.projectId === d.projectId ? { ...x, incomeWithTax: e.target.value } : x))} /></div>
+                          <div className="space-y-2"><Label>不含税收入</Label><Input type="number" value={d.incomeWithoutTax} onChange={(e) => setPendingNewDeals((prev) => prev.map((x) => x.projectId === d.projectId ? { ...x, incomeWithoutTax: e.target.value } : x))} /></div>
+                          <div className="space-y-2"><Label>预估成本</Label><Input type="number" value={d.estimatedCost} onChange={(e) => setPendingNewDeals((prev) => prev.map((x) => x.projectId === d.projectId ? { ...x, estimatedCost: e.target.value } : x))} /></div>
+                          <div className="space-y-2"><Label>已付第三方成本</Label><Input type="number" value={d.paidThirdPartyCost} onChange={(e) => setPendingNewDeals((prev) => prev.map((x) => x.projectId === d.projectId ? { ...x, paidThirdPartyCost: e.target.value } : x))} /></div>
+                          <div className="space-y-2"><Label>已收金额</Label><Input type="number" value={d.receivedAmount} onChange={(e) => setPendingNewDeals((prev) => prev.map((x) => x.projectId === d.projectId ? { ...x, receivedAmount: e.target.value } : x))} /></div>
+                          <div className="space-y-2"><Label>预计首款时间</Label><Input type="date" value={slashToInputDate(d.firstPaymentDate)} onChange={(e) => setPendingNewDeals((prev) => prev.map((x) => x.projectId === d.projectId ? { ...x, firstPaymentDate: inputDateToSlash(e.target.value) } : x))} /></div>
+                          <div className="space-y-2"><Label>预计尾款时间</Label><Input type="date" value={slashToInputDate(d.finalPaymentDate)} onChange={(e) => setPendingNewDeals((prev) => prev.map((x) => x.projectId === d.projectId ? { ...x, finalPaymentDate: inputDateToSlash(e.target.value) } : x))} /></div>
+                        </div>
+                      </div>
+                    ))}
+                    <div className="flex justify-end">
+                      <Button type="button" onClick={submitPendingDeals}>
+                        提交立项详情并进入步骤 5
+                      </Button>
+                    </div>
+                  </div>
+                )}
+
               </div>
             )}
 
@@ -1665,57 +1726,6 @@ export default function DailyFormTab() {
                 <Label htmlFor="s5-no">否</Label>
               </div>
             </RadioGroup>
-            
-            {pendingNewDeals.length > 0 && (
-              <div className="space-y-3 rounded-lg border p-4">
-                <div className="text-sm font-medium">签单项目需要补充立项信息（将同步写回立项表）</div>
-                {pendingNewDeals.map((d, idx) => (
-                  <div key={d.projectId} className="rounded-md border p-3 space-y-3">
-                    <div className="text-sm font-medium">{idx + 1}. {d.projectName}</div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      <div className="space-y-2 sm:col-span-2">
-                        <Label>立项ID（默认项目ID，不可修改）*</Label>
-                        <Input value={d.dealId} disabled />
-                      </div>
-                      <div className="space-y-2 sm:col-span-2">
-                        <Label>客户ID（来自飞书，不可修改）*</Label>
-                        <Input value={d.customerId} disabled />
-                      </div>
-                      <div className="space-y-2">
-                        <Label>项目开始时间 *</Label>
-                        <Input type="date" value={slashToInputDate(d.startDate)} onChange={(e) => setPendingNewDeals((prev) => prev.map((x) => x.projectId === d.projectId ? { ...x, startDate: inputDateToSlash(e.target.value) } : x))} />
-                      </div>
-                      <div className="space-y-2">
-                        <Label>项目结束时间 *</Label>
-                        <Input type="date" value={slashToInputDate(d.endDate)} onChange={(e) => setPendingNewDeals((prev) => prev.map((x) => x.projectId === d.projectId ? { ...x, endDate: inputDateToSlash(e.target.value) } : x))} />
-                      </div>
-                      <div className="space-y-2">
-                        <Label>归属</Label>
-                        <OptionSelect value={d.belong} onValueChange={(v) => setPendingNewDeals((prev) => prev.map((x) => x.projectId === d.projectId ? { ...x, belong: v } : x))} placeholder="选择归属" options={DEAL_BELONG_OPTIONS} />
-                      </div>
-                      <div className="space-y-2">
-                        <Label>是否完结 *</Label>
-                        <OptionSelect value={d.isFinished} onValueChange={(v) => setPendingNewDeals((prev) => prev.map((x) => x.projectId === d.projectId ? { ...x, isFinished: v } : x))} placeholder="选择" options={COMPLETION_STATUS} />
-                      </div>
-                      <div className="space-y-2">
-                        <Label>签约公司主体 *</Label>
-                        <OptionSelect value={d.contractEntity} onValueChange={(v) => setPendingNewDeals((prev) => prev.map((x) => x.projectId === d.projectId ? { ...x, contractEntity: v } : x))} placeholder="选择签约主体" options={CONTRACT_ENTITIES} />
-                      </div>
-                      <div className="space-y-2"><Label>含税收入</Label><Input type="number" value={d.incomeWithTax} onChange={(e) => setPendingNewDeals((prev) => prev.map((x) => x.projectId === d.projectId ? { ...x, incomeWithTax: e.target.value } : x))} /></div>
-                      <div className="space-y-2"><Label>不含税收入</Label><Input type="number" value={d.incomeWithoutTax} onChange={(e) => setPendingNewDeals((prev) => prev.map((x) => x.projectId === d.projectId ? { ...x, incomeWithoutTax: e.target.value } : x))} /></div>
-                      <div className="space-y-2"><Label>预估成本</Label><Input type="number" value={d.estimatedCost} onChange={(e) => setPendingNewDeals((prev) => prev.map((x) => x.projectId === d.projectId ? { ...x, estimatedCost: e.target.value } : x))} /></div>
-                      <div className="space-y-2"><Label>已付第三方成本</Label><Input type="number" value={d.paidThirdPartyCost} onChange={(e) => setPendingNewDeals((prev) => prev.map((x) => x.projectId === d.projectId ? { ...x, paidThirdPartyCost: e.target.value } : x))} /></div>
-                      <div className="space-y-2"><Label>已收金额</Label><Input type="number" value={d.receivedAmount} onChange={(e) => setPendingNewDeals((prev) => prev.map((x) => x.projectId === d.projectId ? { ...x, receivedAmount: e.target.value } : x))} /></div>
-                      <div className="space-y-2"><Label>预计首款时间</Label><Input type="date" value={slashToInputDate(d.firstPaymentDate)} onChange={(e) => setPendingNewDeals((prev) => prev.map((x) => x.projectId === d.projectId ? { ...x, firstPaymentDate: inputDateToSlash(e.target.value) } : x))} /></div>
-                      <div className="space-y-2"><Label>预计尾款时间</Label><Input type="date" value={slashToInputDate(d.finalPaymentDate)} onChange={(e) => setPendingNewDeals((prev) => prev.map((x) => x.projectId === d.projectId ? { ...x, finalPaymentDate: inputDateToSlash(e.target.value) } : x))} /></div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-
-
-
             {hasUpdateDeal === "yes" && (
               <div className="space-y-4 pt-4 border-t">
                 <div className="space-y-2">
