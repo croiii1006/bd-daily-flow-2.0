@@ -1683,11 +1683,6 @@ export default function DailyFormTab() {
                         </div>
                       </div>
                     ))}
-                    <div className="flex justify-end">
-                      <Button type="button" onClick={submitPendingDeals}>
-                        提交立项详情并进入步骤 5
-                      </Button>
-                    </div>
                   </div>
                 )}
 
@@ -1698,9 +1693,15 @@ export default function DailyFormTab() {
               <Button variant="outline" onClick={() => setCurrentStep(3)}>
                 上一步
               </Button>
-              <Button onClick={handleNext}>
-                下一步 <ChevronRight className="ml-1 h-4 w-4" />
-              </Button>
+              {pendingNewDeals.length > 0 ? (
+                <Button onClick={submitPendingDeals}>
+                  提交立项详情并进入步骤 5
+                </Button>
+              ) : (
+                <Button onClick={handleNext}>
+                  下一步 <ChevronRight className="ml-1 h-4 w-4" />
+                </Button>
+              )}
             </div>
           </CardContent>
         </Card>
@@ -1751,7 +1752,6 @@ export default function DailyFormTab() {
                   <div className="space-y-4 rounded-lg border p-4">
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <div className="space-y-2 sm:col-span-2"><Label>立项ID（不可修改）*</Label><Input value={updateDealDraft.dealId} disabled /></div>
-                      <div className="space-y-2 sm:col-span-2"><Label>项目ID（不可修改）*</Label><Input value={updateDealDraft.projectId} disabled /></div>
                       <div className="space-y-2 sm:col-span-2"><Label>项目名称 *</Label><Input value={updateDealDraft.projectName} onChange={(e) => setUpdateDealDraft({ ...updateDealDraft, projectName: e.target.value })} /></div>
                       <div className="space-y-2"><Label>项目开始时间 *</Label><Input type="date" value={slashToInputDate(updateDealDraft.startDate)} onChange={(e) => setUpdateDealDraft({ ...updateDealDraft, startDate: inputDateToSlash(e.target.value) })} /></div>
                       <div className="space-y-2"><Label>项目结束时间 *</Label><Input type="date" value={slashToInputDate(updateDealDraft.endDate)} onChange={(e) => setUpdateDealDraft({ ...updateDealDraft, endDate: inputDateToSlash(e.target.value) })} /></div>
