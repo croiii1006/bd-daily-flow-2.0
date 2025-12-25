@@ -14,11 +14,11 @@
   ],
   "crons": [
     {
-      "path": "/api/notify/daily?title=提醒预览&url=https%3A%2F%2Fbd-daily-flow-2-0.vercel.app%2Fapp%2Freminders",
+      "path": "/api/notify/daily?title=提醒预览&url=https%3A%2F%2Fbd-daily-flow-2-0.vercel.app%2F",
       "schedule": "0 2 * * 1-5"
     },
     {
-      "path": "/api/notify/daily?title=每日表单&url=https%3A%2F%2Fbd-daily-flow-2-0.vercel.app%2Fapp%2Fdaily",
+      "path": "/api/notify/daily?title=每日表单&url=https%3A%2F%2Fbd-daily-flow-2-0.vercel.app%2F",
       "schedule": "0 10 * * 1-5"
     }
   ]
